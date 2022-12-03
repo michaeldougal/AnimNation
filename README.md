@@ -8,7 +8,7 @@ Built upon the foundations of Tweentown and SpringCity, AnimNation is a utility 
 ### SpringInfo
 A dictionary of spring properties such as `{s = 10, d = 0.5}`. Can be constructed using any keys that you could use to create a Spring object. Possible keys:
 ```lua
-Initial = Initial
+Initial = Initial | i
 Speed = Speed | s
 Damper = Damper | d
 Target = Target | t
