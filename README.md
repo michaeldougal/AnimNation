@@ -6,7 +6,16 @@ Built upon the foundations of Tweentown and SpringCity, AnimNation is a utility 
 
 ## Types
 ### SpringInfo
-A dictionary of spring properties such as `{s = 10, d = 0.5}`. Can be constructed using any keys that you could use to create a Spring object.
+A dictionary of spring properties such as `{s = 10, d = 0.5}`. Can be constructed using any keys that you could use to create a Spring object. Possible keys:
+```lua
+Initial = Initial
+Speed = Speed | s
+Damper = Damper | d
+Target = Target | t
+Velocity = Velocity | v
+Position = Position | Value | p
+Clock = Clock
+```
 
 ### AnimChain
 An object that listens for the end of a tween/spring animation and then fires any connected `:AndThen()` callbacks. `:AndThen()` always returns the same `AnimChain` object, so you can chain as many callbacks together as you want.
