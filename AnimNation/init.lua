@@ -194,7 +194,7 @@ end
 function AnimChain:AndThen(callback: () -> ()): AnimChain
 	if self._type == "Spring" then
 		task.spawn(function()
-			while AnimNation.springAnimating(self._anim) do task.wait() end
+			while self._anim:IsAnimating() do task.wait() end
 			callback()
 		end)
 	elseif self._type == "Tween" then
@@ -424,11 +424,11 @@ local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spr
 end
 
 local function animate(spring, object, property)
-	local animating, position = AnimNation.springAnimating(spring)
+	local animating, position = spring:IsAnimating()
 	while animating do
 		object[property] = position
 		task.wait()
-		animating, position = AnimNation.springAnimating(spring)
+		animating, position = spring:IsAnimating()
 	end
 
 	object[property] = spring.Target
@@ -710,6 +710,8 @@ function AnimNation.impulse(object: Instance, springInfo: SpringInfo, properties
 				needsAnimationLink = false
 			end
 
+			springInfo.Initial = nil
+
 			local newSpring = SpringEvents[object][property]
 
 			if not animChain then
@@ -752,6 +754,7 @@ function AnimNation.target(object: Instance, springInfo: SpringInfo, properties:
 		end
 		springInfo.Target = target
 		AnimNation.impulse(object, springInfo, {[property] = ZEROS[targetType]}, waitToKill and not yieldStarted)
+		springInfo.Target = nil
 		yieldStarted = waitToKill
 	end
 end
