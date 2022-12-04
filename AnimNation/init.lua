@@ -417,7 +417,7 @@ end
 
 local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spring
 	for key, value in pairs(springInfo) do
-		if key ~= "Initial" and key ~= "Clock" and key ~= "Position" then
+		if key ~= "Initial" and key ~= "i" and key ~= "Clock" and key ~= "Position" then
 			spring[key] = value
 		end
 	end
