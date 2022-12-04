@@ -1,6 +1,8 @@
-![banner-01](https://user-images.githubusercontent.com/67706277/205463774-5c513218-9ca9-4b36-8d1d-1c1ac75f4c5a.png)
+<div align="center">
+<img src="https://user-images.githubusercontent.com/67706277/205463774-5c513218-9ca9-4b36-8d1d-1c1ac75f4c5a.png" />
 
 Built upon the foundations of Tweentown and SpringCity, AnimNation is a utility that makes Roblox object animation using springs and tweens simple and quick.
+</div>
 
 <br/>
 
