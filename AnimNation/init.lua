@@ -2,7 +2,7 @@
 	Author: ChiefWildin
 	Module: AnimNation
 	Created: 10/12/2022
-	Version: 1.3.2
+	Version: 1.4.0
 
 	Built upon the foundations of Tweentown and SpringCity, AnimNation is a
 	utility that makes object animation using springs and tweens simple and
@@ -115,17 +115,14 @@
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
-
 -- Module Declaration
 
 local AnimNation = {}
-
 
 -- Dependencies
 
 ---@module Spring
 local Spring = require(script:WaitForChild("Spring"))
-
 
 -- Constants
 
@@ -137,7 +134,7 @@ local SUPPORTED_TYPES = {
 	UDim2 = true,
 	UDim = true,
 	CFrame = true,
-	Color3 = true
+	Color3 = true,
 }
 local ZEROS = {
 	number = 0,
@@ -146,7 +143,7 @@ local ZEROS = {
 	UDim2 = UDim2.new(),
 	UDim = UDim.new(),
 	CFrame = CFrame.identity,
-	Color3 = Color3.new()
+	Color3 = Color3.new(),
 }
 
 -- Overloads
@@ -178,7 +175,7 @@ export type SpringInfo = {
 export type AnimChain = {
 	_anim: Spring | Tween,
 	_type: "Spring" | "Tween",
-	AndThen: (AnimChain, callback: () -> ()) -> AnimChain
+	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
 }
 
 local AnimChain: AnimChain = {}
@@ -194,7 +191,9 @@ end
 function AnimChain:AndThen(callback: () -> ()): AnimChain
 	if self._type == "Spring" then
 		task.spawn(function()
-			while self._anim:IsAnimating() do task.wait() end
+			while self._anim:IsAnimating() do
+				task.wait()
+			end
 			callback()
 		end)
 	elseif self._type == "Tween" then
@@ -215,32 +214,31 @@ function AnimChain:AndThen(callback: () -> ()): AnimChain
 	return self :: AnimChain
 end
 
-
 -- Global Variables
 
 -- A dictionary that keeps track of custom springs by name.
-local SpringDirectory: {[string]: Spring} = {}
+local SpringDirectory: { [string]: Spring } = {}
 
 -- A dictionary that keeps track of the internal springs controlling instance
 -- properties.
-local SpringEvents: {[Instance]: {[string]: Spring}} = {}
+local SpringEvents: { [Instance]: { [string]: Spring } } = {}
 
 -- A dictionary that keeps track of different callbacks bound to groups of
 -- springs. The label key references a table containing a table of springs in
 -- the first index, and the callback function in the second index.
-local SpringBinds: {[string]: {}} = {}
+local SpringBinds: { [string]: {} } = {}
 
 -- A dictionary that keeps track of the last tween played on each instance.
-local TweenDirectory: {[Instance]: Tween} = {}
+local TweenDirectory: { [Instance]: Tween } = {}
 
 -- A dictionary that keeps track of the states of NumberSequence/ColorSequence
 -- values.
-local ActiveSequences: {[Instance]: {[string]: {[string]: NumberValue | Color3Value}}} = {}
+local ActiveSequences: { [Instance]: { [string]: { [string]: NumberValue | Color3Value } } } = {}
 
 -- A dictionary that keeps track of any custom tween processes (tweenFromAlpha).
 -- Instances are used as keys to a sub-dictionary that maps properties to the
 -- ID of the custom tween being used to animate them.
-local CustomTweens: {[Instance]: {[string]: number}} = {}
+local CustomTweens: { [Instance]: { [string]: number } } = {}
 
 -- The last ID used to identify which custom tween is controlling a property.
 local LastCustomTweenId = 0
@@ -249,7 +247,6 @@ local LastCustomTweenId = 0
 local BindLoopRunning = false
 
 -- Objects
-
 
 -- Private Functions
 
@@ -286,7 +283,13 @@ local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {},
 	return AnimNation.tween(fakeCenter, tweenInfo, properties, waitToKill)
 end
 
-local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: TweenInfo, newSequence: NumberSequence | ColorSequence, waitToKill: boolean?): AnimChain
+local function tweenSequence(
+	object: Instance,
+	sequenceName: string,
+	tweenInfo: TweenInfo,
+	newSequence: NumberSequence | ColorSequence,
+	waitToKill: boolean?
+): AnimChain
 	local originalSequence = object[sequenceName]
 	local sequenceType = typeof(originalSequence)
 	local numPoints = #originalSequence.Keypoints
@@ -302,14 +305,10 @@ local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: 
 		local newKeypoints = table.create(numPoints)
 		for index, point in pairs(ActiveSequences[object][sequenceName]) do
 			if sequenceType == "NumberSequence" then
-				newKeypoints[index] = NumberSequenceKeypoint.new(
-					point.Time.Value,
-					point.Value.Value,
-					point.Envelope.Value)
+				newKeypoints[index] =
+					NumberSequenceKeypoint.new(point.Time.Value, point.Value.Value, point.Envelope.Value)
 			else
-				newKeypoints[index] = ColorSequenceKeypoint.new(
-					point.Time.Value,
-					point.Value.Value)
+				newKeypoints[index] = ColorSequenceKeypoint.new(point.Time.Value, point.Value.Value)
 			end
 		end
 		if sequenceType == "NumberSequence" then
@@ -331,7 +330,7 @@ local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: 
 				point = {
 					Time = Instance.new("NumberValue"),
 					Value = Instance.new("NumberValue"),
-					Envelope = Instance.new("NumberValue")
+					Envelope = Instance.new("NumberValue"),
 				}
 
 				point.Envelope.Value = keypoint.Envelope
@@ -339,7 +338,7 @@ local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: 
 			elseif sequenceType == "ColorSequence" then
 				point = {
 					Time = Instance.new("NumberValue"),
-					Value = Instance.new("Color3Value")
+					Value = Instance.new("Color3Value"),
 				}
 			end
 
@@ -358,14 +357,16 @@ local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: 
 		local isLast = index == numPoints
 		local shouldWait = isLast and waitToKill
 		if sequenceType == "NumberSequence" then
-			AnimNation.tween(point.Envelope, tweenInfo, {Value = newSequence.Keypoints[index].Envelope})
+			AnimNation.tween(point.Envelope, tweenInfo, { Value = newSequence.Keypoints[index].Envelope })
 		end
-		AnimNation.tween(point.Value, tweenInfo, {Value = newSequence.Keypoints[index].Value})
+		AnimNation.tween(point.Value, tweenInfo, { Value = newSequence.Keypoints[index].Value })
 		local tweenObject = AnimNation.tween(
 			point.Time,
 			tweenInfo,
-			{Value = newSequence.Keypoints[index].Time},
-			shouldWait):AndThen(function()
+			{ Value = newSequence.Keypoints[index].Time },
+			shouldWait
+		)
+			:AndThen(function()
 				if index == numPoints then
 					for _, pointData in pairs(ActiveSequences[object][sequenceName]) do
 						pointData.Value:Destroy()
@@ -390,7 +391,9 @@ local function tweenSequence(object: Instance, sequenceName: string, tweenInfo: 
 				end
 			end)
 
-		if isLast then return tweenObject end
+		if isLast then
+			return tweenObject
+		end
 	end
 end
 
@@ -424,14 +427,24 @@ local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spr
 end
 
 local function animate(spring, object, property)
+	local isModel = object:IsA("Model")
 	local animating, position = spring:IsAnimating()
-	while animating do
-		object[property] = position
-		task.wait()
-		animating, position = spring:IsAnimating()
+	if isModel and property == "CFrame" then
+		while animating do
+			object:PivotTo(position)
+			task.wait()
+			animating, position = spring:IsAnimating()
+			print(animating, position)
+		end
+		object:PivotTo(spring.Target)
+	else
+		while animating do
+			object[property] = position
+			task.wait()
+			animating, position = spring:IsAnimating()
+		end
+		object[property] = spring.Target
 	end
-
-	object[property] = spring.Target
 
 	if SpringEvents[object] then
 		SpringEvents[object][property] = nil
@@ -497,7 +510,12 @@ end
 --
 -- `:AndThen()` can be used to link a callback function when the tween
 -- completes.
-function AnimNation.tween(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, waitToKill: boolean?): AnimChain
+function AnimNation.tween(
+	object: Instance,
+	tweenInfo: TweenInfo | {},
+	properties: { [string]: any },
+	waitToKill: boolean?
+): AnimChain
 	if not object then
 		error("Tween failure - invalid object passed")
 		if waitToKill then
@@ -516,7 +534,7 @@ function AnimNation.tween(object: Instance, tweenInfo: TweenInfo | {}, propertie
 
 	for property, newValue in pairs(properties) do
 		if isModel and property == "CFrame" then
-			alternativeAnimChain = tweenByPivot(object, tweenInfo, {CFrame = newValue})
+			alternativeAnimChain = tweenByPivot(object, tweenInfo, { CFrame = newValue })
 			properties[property] = nil
 		else
 			local propertyType = typeof(object[property])
@@ -563,7 +581,13 @@ end
 --
 -- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
 -- any other type that supports scalar multiplication/addition.
-function AnimNation.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number, waitToKill: boolean?): AnimChain
+function AnimNation.tweenFromAlpha(
+	object: Instance,
+	tweenInfo: TweenInfo | {},
+	properties: { [string]: any },
+	alpha: number,
+	waitToKill: boolean?
+): AnimChain
 	if typeof(alpha) ~= "number" or alpha < 0 or alpha >= 1 then
 		error("Tween failure - alpha must be a number greater than 0 and less than 1")
 		return AnimChain.new()
@@ -590,7 +614,8 @@ function AnimNation.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, 
 			local currentUDim: UDim = start
 			return UDim.new(
 				currentUDim.Scale + (target.Scale - currentUDim.Scale) * a,
-				currentUDim.Offset + (target.Offset - currentUDim.Offset) * a)
+				currentUDim.Offset + (target.Offset - currentUDim.Offset) * a
+			)
 		end
 		return start + (target - start) * a
 	end
@@ -629,7 +654,8 @@ function AnimNation.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, 
 				local currentAlpha = TweenService:GetValue(
 					alpha + (remainingAlpha * percentComplete),
 					tweenInfo.EasingStyle,
-					tweenInfo.EasingDirection)
+					tweenInfo.EasingDirection
+				)
 				for property, tweenId in pairs(CustomTweens[object]) do
 					-- Only apply properties if this tween is still the most
 					-- recent
@@ -686,23 +712,31 @@ end
 --
 -- `:AndThen()` can be used on this function's return value to link another
 -- function that will be called when the spring completes (reaches epsilon).
-function AnimNation.impulse(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?): AnimChain
+function AnimNation.impulse(
+	object: Instance,
+	springInfo: SpringInfo,
+	properties: { [string]: any },
+	waitToKill: boolean?
+): AnimChain
 	if not object then
 		error("Spring failure - invalid object passed")
 		return AnimChain.new()
 	end
 
 	local animChain: AnimChain
-	local trackingPropertyForYield = false
+	local impulsesWorking = 0
+	local isModel = object:IsA("Model")
 	for property, impulse in pairs(properties) do
 		local impulseType = typeof(impulse)
 		if SUPPORTED_TYPES[impulseType] then
 			local needsAnimationLink = true
-			springInfo.Initial = object[property]
+
+			springInfo.Initial = if isModel and property == "CFrame" then object:GetPivot() else object[property]
 
 			if not SpringEvents[object] then
 				SpringEvents[object] = {}
 			end
+
 			if not SpringEvents[object][property] then
 				SpringEvents[object][property] = createSpringFromInfo(springInfo)
 			else
@@ -719,10 +753,14 @@ function AnimNation.impulse(object: Instance, springInfo: SpringInfo, properties
 			end
 
 			newSpring:Impulse(impulse)
+
 			if needsAnimationLink then
-				if waitToKill and not trackingPropertyForYield and animChain then
-					trackingPropertyForYield = true
-					animate(newSpring, object, property)
+				if waitToKill and animChain then
+					impulsesWorking += 1
+					task.spawn(function()
+						animate(newSpring, object, property)
+						impulsesWorking -= 1
+					end)
 				else
 					task.spawn(animate, newSpring, object, property)
 				end
@@ -730,6 +768,10 @@ function AnimNation.impulse(object: Instance, springInfo: SpringInfo, properties
 		else
 			error(string.format("Spring failure - invalid impulse type '%s' for property '%s'", impulseType, property))
 		end
+	end
+
+	while impulsesWorking > 0 do
+		task.wait()
 	end
 
 	return animChain :: AnimChain
@@ -741,11 +783,15 @@ end
 --`SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
 -- optional `waitToKill` flag will make the operation synchronous if true.
 --
--- NOTE: `waitToKill` currently exhibits undefined behavior when targeting
--- multiple properties and no `AnimChain` is returned to enable `:AndThen()`
--- behavior. I plan to fix this and add `:AndThen()` support in a future update.
-function AnimNation.target(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?)
-	local yieldStarted = false
+-- NOTE: Currently there is no `AnimChain` returned to enable `:AndThen()`
+-- behavior. I plan to fix this in a future update.
+function AnimNation.target(
+	object: Instance,
+	springInfo: SpringInfo,
+	properties: { [string]: any },
+	waitToKill: boolean?
+)
+	local springsWorking = 0
 	for property, target in pairs(properties) do
 		local targetType = typeof(target)
 		if not ZEROS[targetType] then
@@ -753,17 +799,29 @@ function AnimNation.target(object: Instance, springInfo: SpringInfo, properties:
 			continue
 		end
 		springInfo.Target = target
-		AnimNation.impulse(object, springInfo, {[property] = ZEROS[targetType]}, waitToKill and not yieldStarted)
+		springsWorking += 1
+		AnimNation.impulse(object, springInfo, { [property] = ZEROS[targetType] }):AndThen(function()
+			springsWorking -= 1
+		end)
 		springInfo.Target = nil
-		yieldStarted = waitToKill
+	end
+
+	if waitToKill then
+		while springsWorking > 0 do
+			task.wait()
+		end
 	end
 end
 
 -- Binds a callback function to the given springs' position and velocity. Can be
 -- used to create more complex and constant interactions with spring values than
 -- just a quick impulse or target.
-function AnimNation.bind(springs: {Spring}, label: string, callback: (positions: {Springable}, velocities: {Springable}) -> ())
-	SpringBinds[label] = {springs, callback, false}
+function AnimNation.bind(
+	springs: { Spring },
+	label: string,
+	callback: (positions: { Springable }, velocities: { Springable }) -> ()
+)
+	SpringBinds[label] = { springs, callback, false }
 	springBindLoop()
 end
 
