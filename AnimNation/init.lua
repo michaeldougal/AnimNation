@@ -2,7 +2,7 @@
 	Author: ChiefWildin
 	Module: AnimNation
 	Created: 10/12/2022
-	Version: 1.4.0
+	Version: 1.5.0
 
 	Built upon the foundations of Tweentown and SpringCity, AnimNation is a
 	utility that makes object animation using springs and tweens simple and
@@ -64,6 +64,12 @@
 				this function. This is due to the backend being a custom
 				solution since Roblox doesn't natively support skipping around
 				in Tween objects :)
+
+		.lerp(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number)
+			Instantly set the given object's properties to a lerped value between it's
+			current state and the given properties. Functions like `.tweenFromAlpha()`,
+			except that it doesn't continue to play the tween. Naturally, the time value
+			used in the provided TweenInfo or table has no effect on this function.
 
 		.getTweenFromInstance(object: Instance): Tween?
 			Returns the last tween played on the given object, or nil if none
@@ -501,6 +507,23 @@ local function springBindLoop()
 	end
 end
 
+local function lerp(object: Instance, start: any, target: any, a: number): any
+	local valueType = typeof(target)
+	if valueType == "CFrame" then
+		local currentCFrame = if object:IsA("Model") then object:GetPivot() else object.CFrame
+		return currentCFrame:Lerp(target, a)
+	elseif valueType == "Color3" or valueType == "UDim2" then
+		return start:Lerp(target, a)
+	elseif valueType == "UDim" then
+		local currentUDim: UDim = start
+		return UDim.new(
+			currentUDim.Scale + (target.Scale - currentUDim.Scale) * a,
+			currentUDim.Offset + (target.Offset - currentUDim.Offset) * a
+		)
+	end
+	return start + (target - start) * a
+end
+
 -- Public Functions
 
 -- Asynchronously performs a tween on the given object.
@@ -603,23 +626,6 @@ function AnimNation.tweenFromAlpha(
 		tweenInfo = createTweenInfoFromTable(tweenInfo)
 	end
 
-	local function getValue(start: any, target: any, a: number): any
-		local valueType = typeof(target)
-		if valueType == "CFrame" then
-			local currentCFrame = if object:IsA("Model") then object:GetPivot() else object.CFrame
-			return currentCFrame:Lerp(target, a)
-		elseif valueType == "Color3" or valueType == "UDim2" then
-			return start:Lerp(target, a)
-		elseif valueType == "UDim" then
-			local currentUDim: UDim = start
-			return UDim.new(
-				currentUDim.Scale + (target.Scale - currentUDim.Scale) * a,
-				currentUDim.Offset + (target.Offset - currentUDim.Offset) * a
-			)
-		end
-		return start + (target - start) * a
-	end
-
 	local thisTweenId = LastCustomTweenId + 1
 	LastCustomTweenId = thisTweenId
 
@@ -632,7 +638,7 @@ function AnimNation.tweenFromAlpha(
 	local startingProperties = {}
 	for property, value in pairs(properties) do
 		startingProperties[property] = object[property]
-		firstIteration[property] = getValue(object[property], value, startingAlpha)
+		firstIteration[property] = lerp(object, object[property], value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
 	end
@@ -660,7 +666,7 @@ function AnimNation.tweenFromAlpha(
 					-- Only apply properties if this tween is still the most
 					-- recent
 					if tweenId == thisTweenId then
-						local newValue = getValue(startingProperties[property], properties[property], currentAlpha)
+						local newValue = lerp(object, startingProperties[property], properties[property], currentAlpha)
 						object[property] = newValue
 						stillControllingSomething = true
 					end
@@ -703,6 +709,53 @@ end
 -- Returns the last tween played on the given object, or `nil` if none exists.
 function AnimNation.getTweenFromInstance(object: Instance): Tween?
 	return TweenDirectory[object]
+end
+
+-- Instantly set the given object's properties to a lerped value between it's
+-- current state and the given properties. Functions like `.tweenFromAlpha()`,
+-- except that it doesn't continue to play the tween. Naturally, the time value
+-- used in the provided TweenInfo or table has no effect on this function.
+--
+-- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
+-- any other type that supports scalar multiplication/addition.
+function AnimNation.lerp(
+	object: Instance,
+	tweenInfo: TweenInfo | {},
+	properties: { [string]: any },
+	alpha: number
+)
+	if typeof(alpha) ~= "number" or alpha < 0 or alpha >= 1 then
+		error("Lerp failure - alpha must be a number greater than 0 and less than 1")
+		return
+	elseif not object then
+		error("Lerp failure - invalid object passed")
+		return
+	end
+
+	if typeof(tweenInfo) == "table" then
+		tweenInfo = createTweenInfoFromTable(tweenInfo)
+	end
+
+	local thisTweenId = LastCustomTweenId + 1
+	LastCustomTweenId = thisTweenId
+
+	if not CustomTweens[object] then
+		CustomTweens[object] = {}
+	end
+
+	local startingAlpha = TweenService:GetValue(alpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
+	local firstIteration = {}
+	for property, value in pairs(properties) do
+		firstIteration[property] = lerp(object, object[property], value, startingAlpha)
+		-- Set custom tween control to this process
+		CustomTweens[object][property] = thisTweenId
+	end
+
+	-- Instantly apply starting values through TweenService, overriding any
+	-- regular tweens from calling .tween()
+	local firstIterationTween = TweenService:Create(object, TweenInfo.new(0), firstIteration)
+	firstIterationTween:Play()
+	firstIterationTween:Destroy()
 end
 
 -- Asynchronously performs a spring impulse on the given object.
