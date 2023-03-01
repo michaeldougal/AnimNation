@@ -2,7 +2,7 @@
 	Author: ChiefWildin
 	Module: AnimNation
 	Created: 10/12/2022
-	Version: 1.5.0
+	Version: 1.5.1
 
 	Built upon the foundations of Tweentown and SpringCity, AnimNation is a
 	utility that makes object animation using springs and tweens simple and
@@ -66,10 +66,11 @@
 				in Tween objects :)
 
 		.lerp(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number)
-			Instantly set the given object's properties to a lerped value between it's
-			current state and the given properties. Functions like `.tweenFromAlpha()`,
-			except that it doesn't continue to play the tween. Naturally, the time value
-			used in the provided TweenInfo or table has no effect on this function.
+	        Instantly set the given object's properties to a lerped value
+			between it's current state and the given properties. Functions like
+			`.tweenFromAlpha()`, except that it doesn't continue to play the
+			tween. Naturally, the time value used in the provided TweenInfo or
+			table has no effect on this function.
 
 		.getTweenFromInstance(object: Instance): Tween?
 			Returns the last tween played on the given object, or nil if none
@@ -507,12 +508,9 @@ local function springBindLoop()
 	end
 end
 
-local function lerp(object: Instance, start: any, target: any, a: number): any
+local function lerp(start: any, target: any, a: number): any
 	local valueType = typeof(target)
-	if valueType == "CFrame" then
-		local currentCFrame = if object:IsA("Model") then object:GetPivot() else object.CFrame
-		return currentCFrame:Lerp(target, a)
-	elseif valueType == "Color3" or valueType == "UDim2" then
+	if valueType == "Color3" or valueType == "UDim2" or valueType == "CFrame" then
 		return start:Lerp(target, a)
 	elseif valueType == "UDim" then
 		local currentUDim: UDim = start
@@ -637,8 +635,8 @@ function AnimNation.tweenFromAlpha(
 	local firstIteration = {}
 	local startingProperties = {}
 	for property, value in pairs(properties) do
-		startingProperties[property] = object[property]
-		firstIteration[property] = lerp(object, object[property], value, startingAlpha)
+		startingProperties[property] = if object:IsA("Model") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
+		firstIteration[property] = lerp(startingProperties[property], value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
 	end
@@ -666,7 +664,7 @@ function AnimNation.tweenFromAlpha(
 					-- Only apply properties if this tween is still the most
 					-- recent
 					if tweenId == thisTweenId then
-						local newValue = lerp(object, startingProperties[property], properties[property], currentAlpha)
+						local newValue = lerp(startingProperties[property], properties[property], currentAlpha)
 						object[property] = newValue
 						stillControllingSomething = true
 					end
@@ -677,6 +675,15 @@ function AnimNation.tweenFromAlpha(
 
 			if not stillControllingSomething then
 				break
+			end
+		end
+
+		-- If we're still controlling this object, apply the final values
+		if CustomTweens[object] then
+			for property, tweenId in pairs(CustomTweens[object]) do
+				if tweenId == thisTweenId then
+					object[property] = properties[property]
+				end
 			end
 		end
 
@@ -744,18 +751,17 @@ function AnimNation.lerp(
 	end
 
 	local startingAlpha = TweenService:GetValue(alpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
-	local firstIteration = {}
+	local lerpedValues = {}
 	for property, value in pairs(properties) do
-		firstIteration[property] = lerp(object, object[property], value, startingAlpha)
+		local start = if object:IsA("Model") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
+		lerpedValues[property] = lerp(start, value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
 	end
 
-	-- Instantly apply starting values through TweenService, overriding any
-	-- regular tweens from calling .tween()
-	local firstIterationTween = TweenService:Create(object, TweenInfo.new(0), firstIteration)
-	firstIterationTween:Play()
-	firstIterationTween:Destroy()
+	-- Instantly apply starting values, overriding any other tweens on this
+	-- object
+	AnimNation.tween(object, TweenInfo.new(0), lerpedValues, true)
 end
 
 -- Asynchronously performs a spring impulse on the given object.
