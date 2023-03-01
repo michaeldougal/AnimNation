@@ -81,7 +81,7 @@ local ZEROS = {
 	["Vector3"] = Vector3.zero,
 	["UDim2"] = UDim2.new(),
 	["UDim"] = UDim.new(),
-	["CFrame"] = CFrame.identity,
+	["CFrame"] = CFrame.new(),
 	["Color3"] = Color3.new(),
 }
 
@@ -138,18 +138,30 @@ local Converters = {
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
+
 		local startAngleVector, startAngleRot = start:ToAxisAngle()
 		local velocityAngleVector, velocityAngleRot = velocity:ToAxisAngle()
 		local targetAngleVector, targetAngleRot = target:ToAxisAngle()
-		return
-			cframe(a * start.Position + c * target.Position + d * velocity.Position) *
-			cframeFromAxis(
-				a * startAngleVector + c * targetAngleVector + d * velocityAngleVector,
-				a * startAngleRot + c * targetAngleRot + d * velocityAngleRot),
-			cframe(-b * start.Position + b * target.Position + e * velocity.Position) *
-			cframeFromAxis(
-				-b * startAngleVector + b * targetAngleVector + e * velocityAngleVector,
-				-b * startAngleRot + b * targetAngleRot + e * velocityAngleRot)
+
+		local pos = cframe(a * start.Position + c * target.Position + d * velocity.Position)
+		local posRot = cframeFromAxis(
+			a * startAngleVector + c * targetAngleVector + d * velocityAngleVector,
+			a * startAngleRot + c * targetAngleRot + d * velocityAngleRot)
+
+		local vel = cframe(-b * start.Position + b * target.Position + e * velocity.Position)
+		local velRot = cframeFromAxis(
+			-b * startAngleVector + b * targetAngleVector + e * velocityAngleVector,
+			-b * startAngleRot + b * targetAngleRot + e * velocityAngleRot)
+
+		-- Fix NaNs resulting from pos of (0, 0, 0)
+		if velRot ~= velRot then
+			velRot = CFrame.new()
+		end
+		if posRot ~= posRot then
+			posRot = CFrame.new()
+		end
+
+		return pos * posRot, vel * velRot
 	end,
 	["Color3"] = function(a, b, sine, cosH, damperSin, speed, start: Color3, velocity: Color3, target: Color3)
 		local c = 1 - a
