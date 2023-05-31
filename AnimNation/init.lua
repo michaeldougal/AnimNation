@@ -471,7 +471,6 @@ local function animate(spring, object, property)
 			object:PivotTo(position)
 			task.wait()
 			animating, position = spring:IsAnimating()
-			print(animating, position)
 		end
 		object:PivotTo(spring.Target)
 	else
