@@ -36,7 +36,7 @@ DelayTime = DelayTime | Delay | dt
 <br/>
 
 ## Tweens
-AnimNation tweens support all properties that are supported by TweenService, as well as tweening Models by CFrame and tweening NumberSequence/ColorSequence values	(given that the target sequence has the same number of keypoints).
+AnimNation tweens support all properties that are supported by TweenService, as well as tweening Models by `CFrame` and tweening `NumberSequence`/`ColorSequence` values	(given that the target sequence has the same number of keypoints).
 
 ---
 
