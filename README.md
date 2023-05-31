@@ -1,7 +1,7 @@
 <div align="center">
 <img src="https://user-images.githubusercontent.com/67706277/205463774-5c513218-9ca9-4b36-8d1d-1c1ac75f4c5a.png" />
 
-Built upon the foundations of Tweentown and SpringCity, AnimNation is a utility that makes Roblox object animation using springs and tweens simple and quick.
+A streamlined Roblox animation utility that simplifies the use of springs, tweens, and splines on object properties.
 </div>
 
 <br/>
@@ -80,7 +80,7 @@ Asynchronously performs a spring impulse on the given object. The optional `wait
 ```
 Asynchronously uses a spring to transition the given object's properties to the specified values. The optional `waitToKill` flag will make the operation synchronous (yielding) if true.
 
-**NOTE:** waitToKill currently exhibits undefined behavior when targeting multiple properties and no AnimChain is returned to enable `:AndThen()` behavior. I plan to fix this and add `:AndThen()` support in a future update.
+**NOTE:** No `AnimChain` is currently returned to enable `:AndThen()` behavior. I plan to add support for this in a future update.
 
 ---
 
@@ -109,3 +109,29 @@ Creates a new spring with the given properties and maps it to the specified name
 .getSpring(name: string): Spring?
 ```
 Returns the spring with the given name. If none exists, it will return `nil` with a warning, or an error depending on the set `ERROR_POLICY`. Aliases: `.inquire()`
+
+<br/>
+
+## Splines
+AnimNation splines are used in animation for interpolating between a series of points in a smoothed curving fashion.
+
+---
+
+```lua
+.getSpline(name: string): Spline?
+```
+Returns the `Spline` with the given name. If none exists, it will return `nil` with a warning, or an error depending on the set `ERROR_POLICY`.
+
+---
+
+```lua
+.createSpline(controlPoints: {CFrame}, name: string?): Spline
+```
+Creates a new `Spline` from the given control points. This should be a table of `CFrame` values with at least 4 entries.
+
+---
+
+```lua
+.slerpTweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, spline: Spline | {CFrame}, alignment: ("Track" | "Nodes")?, alpha: number?, waitToKill: boolean?): AnimChain
+```
+Asynchronously performs tween-based spherical interpolation on the given object, starting from the specified `alpha` percentage. Parameters are similar to `AnimNation.tweenFromAlpha()`, with the addition of `alignment` which determines whether the object being tweened is aligned to the track orientation or the nodes' orientations. A `spline` argument is also required, which can be supplied as previously constructed spline object or an array of points to create a new one from. `:AndThen()` can be used to link a callback function when the tween completes. Currently supports `number`, `Vector2`, `Vector3`, `UDim`, `UDim2`, `CFrame`, `Color3` and any other type that supports scalar multiplication/addition.
