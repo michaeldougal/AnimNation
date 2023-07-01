@@ -1,7 +1,7 @@
 --[[ File Info
 	Author: ChiefWildin
 	Created: 10/12/2022
-	Version: 1.6.0
+	Version: 1.7.0
 
 	A streamlined Roblox animation utility that simplifies the use of springs
 	and tweens on object properties.
@@ -42,7 +42,7 @@
 --[[ Tweens
 
 	AnimNation tweens support all properties that are supported by TweenService,
-	as well as tweening Models by CFrame and tweening
+	as well as tweening Models by CFrame/Scale and tweening
 	NumberSequence/ColorSequence values	(given that the target sequence has the
 	same number of keypoints).
 
@@ -157,6 +157,7 @@ local Spline = require(script:WaitForChild("Spline")) ---@module Spline
 -- Constants
 
 local ERROR_POLICY: "Warn" | "Error" = if RunService:IsStudio() then "Error" else "Warn"
+local BIND_CONNECTION_TYPE: "Heartbeat" | "Stepped" | "RenderStepped" = "Heartbeat"
 local SUPPORTED_TYPES = {
 	number = true,
 	Vector2 = true,
@@ -277,8 +278,8 @@ local CustomTweens: { [Instance]: { [string]: number } } = {}
 -- The last ID used to identify which custom tween is controlling a property.
 local LastCustomTweenId = 0
 
--- Whether or not the loop controlling spring bind callbacks is running.
-local BindLoopRunning = false
+-- The connection currently handling spring bind callbacks
+local BindLoopConnection
 
 -- Objects
 
@@ -318,6 +319,32 @@ local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {},
 	end)
 
 	return AnimNation.tween(fakeCenter, tweenInfo, properties, waitToKill)
+end
+
+local function tweenByScale(object: Model, tweenInfo: TweenInfo, properties: {}, waitToKill: boolean?): AnimChain
+	if not object or not object:IsA("PVInstance") then
+		error("Tween by scale failure - invalid object passed")
+		if waitToKill then
+			task.wait(tweenInfo.Time)
+		end
+		return AnimChain.new()
+	end
+
+	local scaleRef = Instance.new("NumberValue")
+	scaleRef.Value = object:GetScale()
+	scaleRef:SetAttribute("ANIMNATION_SCALE", true)
+	scaleRef:GetPropertyChangedSignal("Value"):Connect(function()
+		object:ScaleTo(scaleRef.Value)
+	end)
+
+	task.delay(tweenInfo.Time, function()
+		scaleRef:Destroy()
+	end)
+
+	properties.Value = properties.Scale
+	properties.Scale = nil
+
+	return AnimNation.tween(scaleRef, tweenInfo, properties, waitToKill)
 end
 
 local function tweenSequence(
@@ -464,15 +491,21 @@ local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spr
 end
 
 local function animate(spring, object, property)
-	local hasPivot = object:IsA("PVInstance")
 	local animating, position = spring:IsAnimating()
-	if hasPivot and property == "CFrame" then
+	if object:IsA("PVInstance") and property == "CFrame" then
 		while animating do
 			object:PivotTo(position)
 			task.wait()
 			animating, position = spring:IsAnimating()
 		end
 		object:PivotTo(spring.Target)
+	elseif object:IsA("Model") and property == "Scale" then
+		while animating do
+			object:ScaleTo(position)
+			task.wait()
+			animating, position = spring:IsAnimating()
+		end
+		object:ScaleTo(spring.Target)
 	else
 		while animating do
 			object[property] = position
@@ -497,42 +530,38 @@ local function animate(spring, object, property)
 end
 
 local function springBindLoop()
-	if not BindLoopRunning then
-		BindLoopRunning = true
-		task.spawn(function()
-			while true do
-				local activeBind = false
-				for _, bind in pairs(SpringBinds) do
-					activeBind = true
-					local springs = bind[1]
-					local callback = bind[2]
-					local idle = bind[3]
-					local springCount = #springs
-					local positions = table.create(springCount)
-					local velocities = table.create(springCount)
-					local thisIterationIdle = true
-					for index, spring: Spring in pairs(springs) do
-						local animating, position = spring:IsAnimating()
-						if animating then
-							positions[index] = position
-							velocities[index] = spring.Velocity
-							thisIterationIdle = false
-						else
-							positions[index] = spring.Target
-							velocities[index] = ZEROS[spring.Type]
-						end
+	if not BindLoopConnection then
+		BindLoopConnection = RunService[BIND_CONNECTION_TYPE]:Connect(function()
+			local activeBind = false
+			for _, bind in pairs(SpringBinds) do
+				activeBind = true
+				local springs = bind[1]
+				local callback = bind[2]
+				local idle = bind[3]
+				local springCount = #springs
+				local positions = table.create(springCount)
+				local velocities = table.create(springCount)
+				local thisIterationIdle = true
+				for index, spring: Spring in pairs(springs) do
+					local animating, position = spring:IsAnimating()
+					if animating then
+						positions[index] = position
+						velocities[index] = spring.Velocity
+						thisIterationIdle = false
+					else
+						positions[index] = spring.Target
+						velocities[index] = ZEROS[spring.Type]
 					end
-					if not thisIterationIdle or not idle then
-						callback(positions, velocities)
-					end
-					bind[3] = thisIterationIdle
 				end
-				if not activeBind then
-					break
+				if not thisIterationIdle or not idle then
+					callback(positions, velocities)
 				end
-				task.wait()
+				bind[3] = thisIterationIdle
 			end
-			BindLoopRunning = false
+			if not activeBind then
+				BindLoopConnection:Disconnect()
+				BindLoopConnection = nil
+			end
 		end)
 	end
 end
@@ -581,13 +610,19 @@ function AnimNation.tween(
 		tweenInfo = createTweenInfoFromTable(tweenInfo)
 	end
 
-	local isModel = object:IsA("PVInstance")
 	local alternativeAnimChain: AnimChain?
 	local normalCount = 0
+	local isPVInstance = object:IsA("PVInstance")
+	local isModel = object:IsA("Model")
+	local isPivot = object:GetAttribute("ANIMNATION_PIVOT")
+	local isScale = object:GetAttribute("ANIMNATION_SCALE")
 
 	for property, newValue in pairs(properties) do
-		if isModel and property == "CFrame" and not object:GetAttribute("ANIMNATION_PIVOT") then
+		if isPVInstance and not isPivot and property == "CFrame" then
 			alternativeAnimChain = tweenByPivot(object, tweenInfo, { CFrame = newValue })
+			properties[property] = nil
+		elseif isModel and not isScale and property == "Scale" then
+			alternativeAnimChain = tweenByScale(object, tweenInfo, { Scale = newValue })
 			properties[property] = nil
 		else
 			local propertyType = typeof(object[property])
@@ -671,8 +706,11 @@ function AnimNation.tweenFromAlpha(
 	local startingAlpha = TweenService:GetValue(alpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
 	local firstIteration = {}
 	local startingProperties = {}
+	local isPVInstance = object:IsA("PVInstance")
+	local isModel = object:IsA("Model")
+
 	for property, value in pairs(properties) do
-		startingProperties[property] = if object:IsA("PVInstance") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
+		startingProperties[property] = if isPVInstance and property == "CFrame" then object:GetPivot() else object[property]
 		firstIteration[property] = lerp(startingProperties[property], value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
@@ -701,8 +739,10 @@ function AnimNation.tweenFromAlpha(
 					-- recent
 					if tweenId == thisTweenId then
 						local newValue = lerp(startingProperties[property], properties[property], currentAlpha)
-						if object:IsA("PVInstance") and property == "CFrame" then
+						if isPVInstance and property == "CFrame" then
 							object:PivotTo(newValue)
+						elseif isModel and property == "Scale" then
+							object:ScaleTo(newValue)
 						else
 							object[property] = newValue
 						end
@@ -722,8 +762,10 @@ function AnimNation.tweenFromAlpha(
 		if CustomTweens[object] then
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
-					if object:IsA("PVInstance") and property == "CFrame" then
+					if isPVInstance and property == "CFrame" then
 						object:PivotTo(properties[property])
+					elseif isModel and property == "Scale" then
+						object:ScaleTo(properties[property])
 					else
 						object[property] = properties[property]
 					end
@@ -819,13 +861,21 @@ function AnimNation.impulse(
 
 	local animChain: AnimChain
 	local impulsesWorking = 0
-	local isModel = object:IsA("PVInstance")
+	local isPVInstance = object:IsA("PVInstance")
+	local isModel = object:IsA("Model")
+
 	for property, impulse in pairs(properties) do
 		local impulseType = typeof(impulse)
 		if SUPPORTED_TYPES[impulseType] then
 			local needsAnimationLink = true
 
-			springInfo.Initial = if isModel and property == "CFrame" then object:GetPivot() else object[property]
+			if isPVInstance and property == "CFrame" then
+				springInfo.Initial = object:GetPivot()
+			elseif isModel and property == "Scale" then
+				springInfo.Initial = object:GetScale()
+			else
+				springInfo.Initial = object[property]
+			end
 
 			if not SpringEvents[object] then
 				SpringEvents[object] = {}
@@ -1029,6 +1079,9 @@ function AnimNation.slerpTweenFromAlpha(
 	local firstIteration = {}
 	local startingProperties = {CFrame = spline:GetLinearCFrameFromAlpha(0, alignment)}
 	local properties = {CFrame = spline:GetLinearCFrameAtAlpha(1, alignment)}
+	local isPVInstance = object:IsA("PVInstance")
+	local isModel = object:IsA("Model")
+
 	for property, value in pairs(properties) do
 		startingProperties[property] = if object:IsA("PVInstance") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
 		firstIteration[property] = lerp(startingProperties[property], value, startingAlpha)
@@ -1059,8 +1112,10 @@ function AnimNation.slerpTweenFromAlpha(
 					-- recent
 					if tweenId == thisTweenId then
 						local newValue = spline:GetCFrameFromAlpha(currentAlpha, alignment)
-						if object:IsA("PVInstance") and property == "CFrame" then
+						if isPVInstance and property == "CFrame" then
 							object:PivotTo(newValue)
+						elseif isModel and property == "Scale" then
+							object:ScaleTo(newValue)
 						else
 							object[property] = newValue
 						end
@@ -1080,8 +1135,10 @@ function AnimNation.slerpTweenFromAlpha(
 		if CustomTweens[object] then
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
-					if object:IsA("PVInstance") and property == "CFrame" then
+					if isPVInstance and property == "CFrame" then
 						object:PivotTo(properties[property])
+					elseif isModel and property == "Scale" then
+						object:ScaleTo(properties[property])
 					else
 						object[property] = properties[property]
 					end
