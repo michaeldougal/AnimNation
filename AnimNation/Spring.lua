@@ -94,7 +94,8 @@ local udim2 = UDim2.new
 local udim = UDim.new
 local color3 = Color3.new
 local cframe = CFrame.new
-local cframeFromAxis = CFrame.fromAxisAngle
+local cframeFromOrientation = CFrame.fromOrientation
+local cframeToOrientation = CFrame.identity.ToOrientation
 local vector3 = Vector3.new
 
 local function directConversion(a, b, sine, cosH, damperSin, speed, start, velocity, target)
@@ -139,29 +140,19 @@ local Converters = {
 		local d = sine / speed
 		local e = cosH - damperSin
 
-		local startAngleVector, startAngleRot = start:ToAxisAngle()
-		local velocityAngleVector, velocityAngleRot = velocity:ToAxisAngle()
-		local targetAngleVector, targetAngleRot = target:ToAxisAngle()
+		local startAngle = vector3(cframeToOrientation(start))
+		local targetAngle = vector3(cframeToOrientation(target))
+		local velocityAngle = vector3(cframeToOrientation(velocity))
 
 		local pos = cframe(a * start.Position + c * target.Position + d * velocity.Position)
-		local posRot = cframeFromAxis(
-			a * startAngleVector + c * targetAngleVector + d * velocityAngleVector,
-			a * startAngleRot + c * targetAngleRot + d * velocityAngleRot)
+		local posRot = a * startAngle + c * targetAngle + d * velocityAngle
+		pos *= cframeFromOrientation(posRot.X, posRot.Y, posRot.Z)
 
 		local vel = cframe(-b * start.Position + b * target.Position + e * velocity.Position)
-		local velRot = cframeFromAxis(
-			-b * startAngleVector + b * targetAngleVector + e * velocityAngleVector,
-			-b * startAngleRot + b * targetAngleRot + e * velocityAngleRot)
+		local velRot = -b * startAngle + b * targetAngle + e * velocityAngle
+		vel *= cframeFromOrientation(velRot.X, velRot.Y, velRot.Z)
 
-		-- Fix NaNs resulting from pos of (0, 0, 0)
-		if velRot ~= velRot then
-			velRot = CFrame.new()
-		end
-		if posRot ~= posRot then
-			posRot = CFrame.new()
-		end
-
-		return pos * posRot, vel * velRot
+		return pos, vel
 	end,
 	["Color3"] = function(a, b, sine, cosH, damperSin, speed, start: Color3, velocity: Color3, target: Color3)
 		local c = 1 - a
@@ -291,15 +282,13 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Vector3)
 			or abs(position.Offset - target.Offset) > epsilon
 			or abs(velocity.Offset) > epsilon
 	elseif self.Type == "CFrame" then
-		local startAngleVector, startAngleRot = position:ToAxisAngle()
-		local velocityAngleVector, velocityAngleRot = velocity:ToAxisAngle()
-		local targetAngleVector, targetAngleRot = target:ToAxisAngle()
+		local startAngle = vector3(cframeToOrientation(position))
+		local targetAngle = vector3(cframeToOrientation(target))
+		local velocityAngle = vector3(cframeToOrientation(velocity))
 		animating = (position.Position - target.Position).Magnitude > epsilon
 			or velocity.Position.Magnitude > epsilon
-			or (startAngleVector - targetAngleVector).Magnitude > epsilon
-			or velocityAngleVector.Magnitude > epsilon
-			or abs(startAngleRot - targetAngleRot) > epsilon
-			or abs(velocityAngleRot) > epsilon
+			or (startAngle - targetAngle).Magnitude > epsilon
+			or velocityAngle.Magnitude > epsilon
 	elseif self.Type == "Color3" then
 		local startVector = vector3(position.R, position.G, position.B)
 		local velocityVector = vector3(velocity.R, velocity.G, velocity.B)
