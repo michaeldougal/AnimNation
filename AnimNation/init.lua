@@ -217,34 +217,89 @@ function AnimChain.new(original: Spring | Tween)
 	local self = setmetatable({}, AnimChain)
 	self._anim = original
 	self._type = if typeof(original) == "Instance" then "Tween" else "Spring"
+	self._callbackQueue = {}
+	self._processingQueue = false
 	return self
+end
+
+function AnimChain:_processCallbackQueue()
+	if not self._processingQueue then
+		self._processingQueue = true
+		while self._callbackQueue[1] do
+			table.remove(self._callbackQueue, 1)()
+		end
+		self._processingQueue = false
+	end
 end
 
 function AnimChain:AndThen(callback: () -> ()): AnimChain
 	if self._type == "Spring" then
 		task.spawn(function()
+			table.insert(self._callbackQueue, callback)
 			while self._anim:IsAnimating() do
 				task.wait()
 			end
-			callback()
+			self:_processCallbackQueue()
 		end)
 	elseif self._type == "Tween" then
 		if self._anim then
 			if self._anim.PlaybackState == Enum.PlaybackState.Completed then
-				task.spawn(callback)
+				table.insert(self._callbackQueue, callback)
+				task.spawn(self._processCallbackQueue, self)
 			else
 				self._anim.Completed:Connect(function(playbackState)
 					if playbackState == Enum.PlaybackState.Completed then
-						callback()
+						table.insert(self._callbackQueue, callback)
+						task.spawn(self._processCallbackQueue, self)
 					end
 				end)
 			end
 		else
-			callback()
+			table.insert(self._callbackQueue, callback)
+			task.spawn(self._processCallbackQueue, self)
 		end
 	end
 	return self :: AnimChain
 end
+
+function AnimChain:Await(): AnimChain
+	local locked = true
+	local unlock = function()
+		locked = false
+	end
+
+	table.insert(self._callbackQueue, unlock)
+
+	if self._type == "Spring" then
+		while self._anim:IsAnimating() do
+			task.wait()
+		end
+
+		task.spawn(self._processCallbackQueue, self)
+
+		while locked do
+			task.wait()
+		end
+	elseif self._type == "Tween" then
+		if self._anim then
+			if self._anim.PlaybackState == Enum.PlaybackState.Completed then
+				task.spawn(self._processCallbackQueue, self)
+			else
+				self._anim.Completed:Connect(function(playbackState)
+					if playbackState == Enum.PlaybackState.Completed then
+						task.spawn(self._processCallbackQueue, self)
+					end
+				end)
+			end
+		else
+			task.spawn(self._processCallbackQueue, self)
+		end
+	end
+	return self :: AnimChain
+end
+
+AnimChain.andThen = AnimChain.AndThen
+AnimChain.await = AnimChain.Await
 
 -- Global Variables
 
