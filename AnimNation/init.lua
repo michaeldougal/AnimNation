@@ -1,13 +1,19 @@
 --[[ File Info
 	Author: ChiefWildin
 	Created: 10/12/2022
-	Version: 1.7.0
+	Version: 1.8.0
 
 	A streamlined Roblox animation utility that simplifies the use of springs
 	and tweens on object properties.
 --]]
 
 --[[ Types
+
+	AnimChain
+	    An object that can be used to link functionality to the end of an
+	    animation. :AndThen() can be used to link a callback, and :Await() can
+	    be used to wait for the animation to complete. These links are processed
+	    in the order they are called in.
 
 	SpringInfo
 		A dictionary of spring properties such as {s = 10, d = 0.5}. Can be
@@ -20,12 +26,6 @@
 		Velocity = Velocity | v
 		Position = Position | Value | p
 		Clock = Clock
-
-	AnimChain
-		An object that listens for the end of a tween/spring animation and then
-		fires any connected :AndThen() callbacks. :AndThen() always	returns the
-		same AnimChain object, so you can chain as many	callbacks together as
-		you want.
 
 	TweenInfo
 		TweenInfo can be passed to the tweening functions as either a TweenInfo
@@ -47,13 +47,13 @@
 	same number of keypoints).
 
 	.tween(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, waitToKill: boolean?): AnimChain
-		Asynchronously performs a tween on the given object. Parameters are
-		identical to TweenService:Create(), with the addition of waitToKill,
-		which will make	the operation synchronous (yielding) if true. :AndThen()
-		can be used to link another function that will be called when the tween
-		completes.
+		Asynchronously performs a tween on the given object. Tween parameters
+	    are identical to TweenService:Create(). The waitToKill parameter is
+		included for backwards compatibility, however it is highly recommended
+		to use :Await() instead to yield until the animation has completed.
+		Returns an AnimChain.
 
-	.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number, waitToKill: boolean?): AnimChain
+	.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number, waitToKill: boolean?)
 		Asynchronously performs a tween on the given object, starting from the
 		specified alpha percentage. Otherwise identical to AnimNation.tween.
 		Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim
@@ -83,17 +83,16 @@
 
 	.impulse(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?): AnimChain
 		Asynchronously performs a spring impulse on the given object. The
-		optional waitToKill flag will make the operation synchronous (yielding)
-		if true. :AndThen() can be used on this function's return value to link
-		another function that will be called when the spring completes (reaches
-		epsilon).
+		waitToKill parameter is included for backwards compatibility, however it
+		is highly recommended to use :Await() instead to yield until the
+		animation has completed. Returns an AnimChain.
 
-	.target(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?)
+	.target(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?): AnimChain
 		Asynchronously uses a spring to transition the given object's
-		properties to the specified values. The optional waitToKill flag will
-		make the operation synchronous (yielding) if true.
-			NOTE: No AnimChain is currently returned to enable :AndThen()
-			behavior. I plan to add support for this in a future update.
+		properties to the specified values. The waitToKill parameter is included
+		for backwards compatibility, however it is highly recommended to use
+		:Await() instead to yield until the animation has completed. Returns an
+		AnimChain.
 
 	.bind(springs: {Spring}, label: string, callback: (positions: {Springable}, velocities: {Springable}) -> ())
 	    Binds a callback function to the given springs' positions and
@@ -117,7 +116,8 @@
 --[[ Splines
 
 	AnimNation splines are used in animation for interpolating between a series
-	of points in a smoothed curving fashion.
+	of points in a smoothed curving fashion. They currently only support CFrame
+	types and do not yet return AnimChains.
 
 	.getSpline(name: string): Spline?
 	    Returns the spline with the given name. If none exists, it will return
@@ -127,15 +127,14 @@
 		Creates a new spline from the given control points. This should be a
 		table of CFrame values with at least 4 entries.
 
-	.slerpTweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, spline: Spline | {CFrame}, alignment: ("Track" | "Nodes")?, alpha: number?, waitToKill: boolean?): AnimChain
+	.slerpTweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, spline: Spline | {CFrame}, alignment: ("Track" | "Nodes")?, alpha: number?, waitToKill: boolean?)
 	    Asynchronously performs tween-based spherical interpolation on the given
 		object, starting from the specified `alpha` percentage. Parameters are
 		similar to `AnimNation.tweenFromAlpha()`, with the addition of alignment
 		which determines whether the object being tweened is aligned to the
 		track orientation or the nodes' orientations. A spline argument is also
 		required, which can be supplied as previously constructed Spline object
-		or an array of points to create a new one from. :AndThen() can be used
-		to link a callback function when the tween completes. Currently supports
+		or an array of points to create a new one from. Currently supports
 		number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and any other type
 		that supports scalar multiplication/addition.
 --]]
@@ -205,46 +204,86 @@ export type SpringInfo = {
 }
 
 export type AnimChain = {
-	_anim: Spring | Tween,
-	_type: "Spring" | "Tween",
 	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
+	Await: (AnimChain) -> AnimChain,
 }
 
 local AnimChain: AnimChain = {}
 AnimChain.__index = AnimChain
 
-function AnimChain.new(original: Spring | Tween)
+function AnimChain.new(animators: {Spring | Tween})
 	local self = setmetatable({}, AnimChain)
-	self._anim = original
-	self._type = if typeof(original) == "Instance" then "Tween" else "Spring"
+
+	self._animators = animators or {}
+	self._callbackQueue = {}
+	self._processingQueue = false
+
 	return self
 end
 
-function AnimChain:AndThen(callback: () -> ()): AnimChain
-	if self._type == "Spring" then
-		task.spawn(function()
-			while self._anim:IsAnimating() do
+function AnimChain:_addAnimator(animator: Spring | Tween)
+	table.insert(self._animators, animator)
+end
+
+function AnimChain:_processCallbackQueue()
+	if not self._processingQueue then
+		self._processingQueue = true
+
+		while self._callbackQueue[1] do
+			table.remove(self._callbackQueue, 1)()
+		end
+
+		self._processingQueue = false
+	end
+end
+
+function AnimChain:_waitForAnimationsCompleted()
+	for _, animator: Spring | Tween in ipairs(self._animators) do
+		if typeof(animator) == "table" then -- Spring
+			while animator:IsAnimating(0.01) do
 				task.wait()
 			end
-			callback()
-		end)
-	elseif self._type == "Tween" then
-		if self._anim then
-			if self._anim.PlaybackState == Enum.PlaybackState.Completed then
-				task.spawn(callback)
-			else
-				self._anim.Completed:Connect(function(playbackState)
-					if playbackState == Enum.PlaybackState.Completed then
-						callback()
-					end
-				end)
+		elseif typeof(animator) == "Instance" then -- Tween
+			while animator.PlaybackState ~= Enum.PlaybackState.Completed do
+				animator.Completed:Wait()
 			end
-		else
-			callback()
 		end
 	end
+end
+
+function AnimChain:AndThen(callback: () -> ()): AnimChain
+	task.spawn(function()
+		table.insert(self._callbackQueue, callback)
+
+		self:_waitForAnimationsCompleted()
+
+		self:_processCallbackQueue()
+	end)
+
 	return self :: AnimChain
 end
+
+function AnimChain:Await(): AnimChain
+	local locked = true
+	local unlock = function()
+		locked = false
+	end
+
+	table.insert(self._callbackQueue, unlock)
+
+	self:_waitForAnimationsCompleted()
+
+	task.spawn(self._processCallbackQueue, self)
+
+	while locked do
+		task.wait()
+	end
+
+	return self :: AnimChain
+end
+
+AnimChain.andThen = AnimChain.AndThen
+AnimChain.await = AnimChain.Await
 
 -- Global Variables
 
@@ -584,11 +623,10 @@ end
 
 -- Asynchronously performs a tween on the given object.
 --
--- Parameters are identical to `TweenService:Create()`, with the addition of
--- `waitToKill`, which will make the operation synchronous if true.
---
--- `:AndThen()` can be used to link a callback function when the tween
--- completes.
+-- Parameters are identical to `TweenService:Create()`. The `waitToKill`
+-- parameter is included for backwards compatibility, however it is highly
+-- recommended to use `:Await()` instead to yield until the animation has
+-- completed.
 function AnimNation.tween(
 	object: Instance,
 	tweenInfo: TweenInfo | {},
@@ -643,7 +681,7 @@ function AnimNation.tween(
 	end
 
 	local thisTween = TweenService:Create(object, tweenInfo, properties)
-	local tweenChain = AnimChain.new(thisTween)
+	local tweenChain = AnimChain.new({thisTween})
 
 	thisTween:Play()
 	TweenDirectory[object] = thisTween
@@ -667,9 +705,6 @@ end
 -- Parameters are identical to `TweenService:Create()`, with the addition of
 -- `waitToKill` which will make the operation synchronous if true.
 --
--- `:AndThen()` can be used to link a callback function when the tween
--- completes.
---
 -- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
 -- any other type that supports scalar multiplication/addition.
 function AnimNation.tweenFromAlpha(
@@ -678,7 +713,7 @@ function AnimNation.tweenFromAlpha(
 	properties: { [string]: any },
 	alpha: number,
 	waitToKill: boolean?
-): AnimChain
+)
 	if typeof(alpha) ~= "number" then
 		error("Tween failure - alpha must be a number")
 		return AnimChain.new()
@@ -844,10 +879,9 @@ end
 -- Asynchronously performs a spring impulse on the given object.
 --
 -- `SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
--- optional `waitToKill` flag will make the operation synchronous if true.
---
--- `:AndThen()` can be used on this function's return value to link another
--- function that will be called when the spring completes (reaches epsilon).
+-- `waitToKill` parameter is included for backwards compatibility, however it is
+-- highly recommended to use `:Await()` instead to yield until the animation has
+-- completed.
 function AnimNation.impulse(
 	object: Instance,
 	springInfo: SpringInfo,
@@ -893,7 +927,9 @@ function AnimNation.impulse(
 			local newSpring = SpringEvents[object][property]
 
 			if not animChain then
-				animChain = AnimChain.new(newSpring)
+				animChain = AnimChain.new({newSpring})
+			else
+				animChain:_addAnimator(newSpring)
 			end
 
 			newSpring:Impulse(impulse)
@@ -924,29 +960,35 @@ end
 -- Asynchronously uses a spring to transition the given object's properties to
 -- the specified values.
 --
---`SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
--- optional `waitToKill` flag will make the operation synchronous if true.
---
--- NOTE: Currently there is no `AnimChain` returned to enable `:AndThen()`
--- behavior. I plan to fix this in a future update.
+-- `SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
+-- `waitToKill` parameter is included for backwards compatibility, however it is
+-- highly recommended to use `:Await()` instead to yield until the animation has
+-- completed.
 function AnimNation.target(
 	object: Instance,
 	springInfo: SpringInfo,
 	properties: { [string]: any },
 	waitToKill: boolean?
-)
+): AnimChain
 	local springsWorking = 0
+	local animChain = AnimChain.new()
+
 	for property, target in pairs(properties) do
-		local targetType = typeof(target)
-		if not ZEROS[targetType] then
-			error("Spring failure - unsupported target type '" .. targetType .. "' passed")
+		local targetZero = ZEROS[typeof(target)]
+		if not targetZero then
+			error("Spring failure - unsupported target type '" .. typeof(target) .. "' passed")
 			continue
 		end
+
 		springInfo.Target = target
 		springsWorking += 1
-		AnimNation.impulse(object, springInfo, { [property] = ZEROS[targetType] }):AndThen(function()
+
+		local animator = AnimNation.impulse(object, springInfo, { [property] = targetZero }):AndThen(function()
 			springsWorking -= 1
-		end)
+		end)._animators[1]
+
+		animChain:_addAnimator(animator)
+
 		springInfo.Target = nil
 	end
 
@@ -955,6 +997,8 @@ function AnimNation.target(
 			task.wait()
 		end
 	end
+
+	return animChain
 end
 
 -- Binds a callback function to the given springs' position and velocity. Can be
@@ -1025,9 +1069,6 @@ end
 -- required, which can be supplied as previously constructed Spline object or an
 -- array of points to create a new one from.
 --
--- `:AndThen()` can be used to link a callback function when the tween
--- completes.
---
 -- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
 -- any other type that supports scalar multiplication/addition.
 function AnimNation.slerpTweenFromAlpha(
@@ -1037,7 +1078,7 @@ function AnimNation.slerpTweenFromAlpha(
 	alignment: ("Track" | "Nodes")?,
 	alpha: number?,
 	waitToKill: boolean?
-): AnimChain
+)
 	alpha = alpha or 0
 	alignment = alignment or "Nodes"
 
