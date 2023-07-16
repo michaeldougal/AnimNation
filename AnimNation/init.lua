@@ -1,5 +1,5 @@
 --[[ File Info
-	Author: ChiefWildin
+	Author(s): ChiefWildin
 	Created: 10/12/2022
 	Version: 1.9.0-dev
 

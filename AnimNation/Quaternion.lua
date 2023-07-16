@@ -1,5 +1,5 @@
 --[[ File Info
-    Authors: ChiefWildin, EgoMoose
+    Author(s): ChiefWildin, EgoMoose
 
     A quaternion class implementation for Roblox. Based on EgoMoose's version
     (https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)

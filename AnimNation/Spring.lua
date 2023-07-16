@@ -1,5 +1,5 @@
 --[[ File Info
-	Authors: ChiefWildin, TactBacon, Quenty
+	Author(s): ChiefWildin, TactBacon, Quenty
 
 	A physical model of a spring for Roblox. Based off of Quenty's open source
 	version

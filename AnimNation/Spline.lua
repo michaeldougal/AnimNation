@@ -1,5 +1,5 @@
 --[[ File Info
-	Authors: TactBacon, ChiefWildin (feat. eliphant)
+	Author(s): TactBacon, ChiefWildin (feat. eliphant)
 
 	A spline curve class for Roblox.
 --]]
