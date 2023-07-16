@@ -1,57 +1,58 @@
---[[
-Description:
-	A physical model of a spring, useful in many applications. Originally by
-	Quenty, modified heavily by ChiefWildin and TactBacon.
+--[[ File Info
+	Authors: ChiefWildin, TactBacon, Quenty
 
-API:
-	Spring.new(position: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3)
+	A physical model of a spring for Roblox. Based off of Quenty's open source
+	version
+	(https://github.com/Quenty/NevermoreEngine/blob/main/src/spring/src/Shared/Spring.lua)
+
+	Visualization (by Defaultio): https://www.desmos.com/calculator/hn2i9shxbz
+--]]
+
+--[[ Properties
+
+	Position: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
+		Returns the current position
+
+	Velocity: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
+		Returns the current velocity
+
+	Target: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
+		Returns the target
+
+	Damper: number [0, 1]
+		Returns the damper, default 1
+
+	Speed: number [0, infinity)
+		Returns the speed, default 30
+
+	Clock
+		Returns the clock function used to track time
+
+	Type
+		Returns the type of value being tracked
+--]]
+
+--[[ Functions
+
+	.new(position: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3)
 		Creates a new spring
 
-	[Accessing]
-		Spring.Position
-			Returns the current position
-		Spring.Velocity
-			Returns the current velocity
-		Spring.Target
-			Returns the target
-		Spring.Damper
-			Returns the damper
-		Spring.Speed
-			Returns the speed
-		Spring.Clock
-			Returns the clock function used to track time
-		Spring.Type
-			Returns the type of value being tracked
+	:TimeSkip(number DeltaTime)
+		Instantly skips the spring forwards by that amount of now
 
-	[Setting]
-		Target: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
-			Sets the target
-		Position: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
-			Sets the position
-		Velocity: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
-			Sets the velocity
-		Damper: number [0, 1]
-			Sets the spring damper, defaults to 1
-		Speed: number [0, infinity)
-			Sets the spring speed, defaults to 1
+	:Impulse(velocity: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3)
+		Impulses the spring, increasing velocity by the amount given
 
-	[Functions]
-		:TimeSkip(number DeltaTime)
-			Instantly skips the spring forwards by that amount of now
-		:Impulse(velocity: Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3)
-			Impulses the spring, increasing velocity by the amount given
-		:Bind(label: string, callback: function)
-			Binds a callback function to the given spring's position and
-			velocity. Can be used to create more complex and constant
-			interactions with spring values than just a quick impulse or target
-		:Unbind(label: string)
-			Unbinds the given callback label from the spring
-		:IsAnimating(epsilon: number?): (boolean, Vector3)
-			Returns whether or not the spring is animating, and the current
-			position
+	:Bind(label: string, callback: function)
+	    Binds a callback function to the given spring's position and velocity.
+	    Can be used to create more complex and constant interactions with spring
+	    values than just a quick impulse or target
 
-Visualization (by Defaultio):
-	https://www.desmos.com/calculator/hn2i9shxbz
+	:Unbind(label: string)
+		Unbinds the given callback label from the spring
+
+	:IsAnimating(epsilon: number?): (boolean, Vector3)
+		Returns whether or not the spring is animating, and the current position
 ]]
 
 

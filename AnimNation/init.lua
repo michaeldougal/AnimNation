@@ -1,7 +1,7 @@
 --[[ File Info
 	Author: ChiefWildin
 	Created: 10/12/2022
-	Version: 1.8.0
+	Version: 1.9.0-dev
 
 	A streamlined Roblox animation utility that simplifies the use of springs
 	and tweens on object properties.
