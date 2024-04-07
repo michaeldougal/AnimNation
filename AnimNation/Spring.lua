@@ -55,7 +55,6 @@
 		Returns whether or not the spring is animating, and the current position
 ]]
 
-
 local Spring = {}
 
 export type Springable = Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
@@ -71,7 +70,7 @@ export type Spring = {
 	TimeSkip: (Spring, delta: number) -> (),
 	Bind: (Spring, label: string, callback: (position: Springable, velocity: Springable) -> ()) -> (),
 	Unbind: (Spring, label: string) -> (),
-	IsAnimating: (Spring, epsilon: number?) -> (boolean, Vector3)
+	IsAnimating: (Spring, epsilon: number?) -> (boolean, Vector3),
 }
 
 local EULER = 2.7182818284590452353602874713527
@@ -82,7 +81,6 @@ local ZEROS = {
 	["Vector3"] = Vector3.zero,
 	["UDim2"] = UDim2.new(),
 	["UDim"] = UDim.new(),
-	["CFrame"] = CFrame.new(),
 	["Color3"] = Color3.new(),
 }
 
@@ -95,8 +93,7 @@ local udim2 = UDim2.new
 local udim = UDim.new
 local color3 = Color3.new
 local cframe = CFrame.new
-local cframeFromOrientation = CFrame.fromOrientation
-local cframeToOrientation = CFrame.identity.ToOrientation
+local angles = CFrame.Angles
 local vector3 = Vector3.new
 
 local function directConversion(a, b, sine, cosH, damperSin, speed, start, velocity, target)
@@ -112,63 +109,74 @@ local Converters = {
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
-		return
-			udim2(
-				a * start.X.Scale + c * target.X.Scale + d * velocity.X.Scale,
-				a * start.X.Offset + c * target.X.Offset + d * velocity.X.Offset,
-				a * start.Y.Scale + c * target.Y.Scale + d * velocity.Y.Scale,
-				a * start.Y.Offset + c * target.Y.Offset + d * velocity.Y.Offset),
+		return udim2(
+			a * start.X.Scale + c * target.X.Scale + d * velocity.X.Scale,
+			a * start.X.Offset + c * target.X.Offset + d * velocity.X.Offset,
+			a * start.Y.Scale + c * target.Y.Scale + d * velocity.Y.Scale,
+			a * start.Y.Offset + c * target.Y.Offset + d * velocity.Y.Offset
+		),
 			udim2(
 				-b * start.X.Scale + b * target.X.Scale + e * velocity.X.Scale,
 				-b * start.X.Offset + b * target.X.Offset + e * velocity.X.Offset,
 				-b * start.Y.Scale + b * target.Y.Scale + e * velocity.Y.Scale,
-				-b * start.X.Offset + b * target.X.Offset + e * velocity.X.Offset)
+				-b * start.X.Offset + b * target.X.Offset + e * velocity.X.Offset
+			)
 	end,
 	["UDim"] = function(a, b, sine, cosH, damperSin, speed, start, velocity, target)
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
-		return
-			udim(
-				a * start.Scale + c * target.Scale + d * velocity.Scale,
-				a * start.Offset + c * target.Offset + d * velocity.Offset),
+		return udim(
+			a * start.Scale + c * target.Scale + d * velocity.Scale,
+			a * start.Offset + c * target.Offset + d * velocity.Offset
+		),
 			udim(
 				-b * start.Scale + b * target.Scale + e * velocity.Scale,
-				-b * start.Offset + b * target.Offset + e * velocity.Offset)
+				-b * start.Offset + b * target.Offset + e * velocity.Offset
+			)
 	end,
-	["CFrame"] = function(a, b, sine, cosH, damperSin, speed, start: CFrame, velocity: CFrame, target: CFrame)
+	["CFrame"] = function(a, b, sine, cosH, damperSin, speed, start: {}, velocity: {}, target: {})
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
 
-		local startAngle = vector3(cframeToOrientation(start))
-		local targetAngle = vector3(cframeToOrientation(target))
-		local velocityAngle = vector3(cframeToOrientation(velocity))
+		local startPos = vector3(start[1], start[2], start[3])
+		local startAngle = vector3(start[4], start[5], start[6])
+		local targetPos = vector3(target[1], target[2], target[3])
+		local targetAngle = vector3(target[4], target[5], target[6])
+		local velocityPos = vector3(velocity[1], velocity[2], velocity[3])
+		local velocityAngle = vector3(velocity[4], velocity[5], velocity[6])
 
-		local pos = cframe(a * start.Position + c * target.Position + d * velocity.Position)
+		local pos = a * startPos + c * targetPos + d * velocityPos
 		local posRot = a * startAngle + c * targetAngle + d * velocityAngle
-		pos *= cframeFromOrientation(posRot.X, posRot.Y, posRot.Z)
 
-		local vel = cframe(-b * start.Position + b * target.Position + e * velocity.Position)
+		local vel = -b * startPos + b * targetPos + e * velocityPos
 		local velRot = -b * startAngle + b * targetAngle + e * velocityAngle
-		vel *= cframeFromOrientation(velRot.X, velRot.Y, velRot.Z)
 
-		return pos, vel
+		return { pos.X, pos.Y, pos.Z, posRot.X, posRot.Y, posRot.Z }, {
+			vel.X,
+			vel.Y,
+			vel.Z,
+			velRot.X,
+			velRot.Y,
+			velRot.Z,
+		}
 	end,
 	["Color3"] = function(a, b, sine, cosH, damperSin, speed, start: Color3, velocity: Color3, target: Color3)
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
-		return
-			color3(
-				clamp(a * start.R + c * target.R + d * velocity.R, 0, 1),
-				clamp(a * start.G + c * target.G + d * velocity.G, 0, 1),
-				clamp(a * start.B + c * target.B + d * velocity.B, 0, 1)),
+		return color3(
+			clamp(a * start.R + c * target.R + d * velocity.R, 0, 1),
+			clamp(a * start.G + c * target.G + d * velocity.G, 0, 1),
+			clamp(a * start.B + c * target.B + d * velocity.B, 0, 1)
+		),
 			color3(
 				clamp(-b * start.R + b * target.R + e * velocity.R, 0, 1),
 				clamp(-b * start.G + b * target.G + e * velocity.G, 0, 1),
-				clamp(-b * start.B + b * target.B + e * velocity.B, 0, 1))
-	end
+				clamp(-b * start.B + b * target.B + e * velocity.B, 0, 1)
+			)
+	end,
 }
 
 local function directVelocity(self, velocity)
@@ -182,36 +190,22 @@ local VelocityConverters = {
 	["UDim2"] = directVelocity,
 	["UDim"] = directVelocity,
 	["CFrame"] = function(self, velocity)
-		self.Velocity *= velocity
+		velocity = {velocity.X, velocity.Y, velocity.Z, velocity:ToEulerAnglesXYZ()}
+		self:_positionVelocity(self._clock())
+		self._velocity0 = {
+			self._velocity0[1] + velocity[1],
+			self._velocity0[2] + velocity[2],
+			self._velocity0[3] + velocity[3],
+			self._velocity0[4] + velocity[4],
+			self._velocity0[5] + velocity[5],
+			self._velocity0[6] + velocity[6],
+		}
+		self._time0 = self._clock()
 	end,
 	["Color3"] = function(self, velocity)
-		self.Velocity = color3(
-			self.Velocity.R + velocity.R,
-			self.Velocity.G + velocity.G,
-			self.Velocity.B + velocity.B)
-	end
+		self.Velocity = color3(self.Velocity.R + velocity.R, self.Velocity.G + velocity.G, self.Velocity.B + velocity.B)
+	end,
 }
-
---- Creates a new spring
----@param initial Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The starting position of the spring
----@param clock number function to use to update spring
-function Spring.new(initial: Springable, clock): Spring
-	local target = initial or 0
-	clock = clock or os.clock
-	return setmetatable({
-		_clock = clock,
-		_time0 = clock(),
-		_position0 = target,
-		_velocity0 = ZEROS[typeof(target)],
-		_target = target,
-		_damper = 1,
-		_speed = 1,
-		_type = typeof(target),
-		_updating = false,
-		_callbacks = {},
-		_isBound = false,
-	}, Spring)
-end
 
 --- Impulse the spring with a change in velocity
 ---@param velocity Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The velocity to impulse with
@@ -256,7 +250,7 @@ function Spring:Unbind(label: string)
 end
 
 -- Returns whether or not the spring is animating, and the current position
-function Spring:IsAnimating(epsilon: number?): (boolean, Vector3)
+function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 	epsilon = epsilon or EPSILON
 
 	local position = self.Position
@@ -264,11 +258,11 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Vector3)
 	local target = self.Target
 	local animating
 
-	if self.Type == "number" then
+	if self._type == "number" then
 		animating = abs(position - target) > epsilon or abs(velocity) > epsilon
-	elseif self.Type == "Vector3" or self.Type == "Vector2" then
+	elseif self._type == "Vector3" or self._type == "Vector2" then
 		animating = (position - target).Magnitude > epsilon or velocity.Magnitude > epsilon
-	elseif self.Type == "UDim2" then
+	elseif self._type == "UDim2" then
 		animating = abs(position.X.Scale - target.X.Scale) > epsilon
 			or abs(velocity.X.Scale) > epsilon
 			or abs(position.X.Offset - target.X.Offset) > epsilon
@@ -277,20 +271,28 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Vector3)
 			or abs(velocity.Y.Scale) > epsilon
 			or abs(position.Y.Offset - target.Y.Offset) > epsilon
 			or abs(velocity.Y.Offset) > epsilon
-	elseif self.Type == "UDim" then
+	elseif self._type == "UDim" then
 		animating = abs(position.Scale - target.Scale) > epsilon
 			or abs(velocity.Scale) > epsilon
 			or abs(position.Offset - target.Offset) > epsilon
 			or abs(velocity.Offset) > epsilon
-	elseif self.Type == "CFrame" then
-		local startAngle = vector3(cframeToOrientation(position))
-		local targetAngle = vector3(cframeToOrientation(target))
-		local velocityAngle = vector3(cframeToOrientation(velocity))
-		animating = (position.Position - target.Position).Magnitude > epsilon
-			or velocity.Position.Magnitude > epsilon
+	elseif self._type == "CFrame" then
+		local pos = self._position0
+		local vel = self._velocity0
+		local tar = self._target
+
+		local startPos = vector3(pos[1], pos[2], pos[3])
+		local startAngle = vector3(pos[4], pos[5], pos[6])
+		local targetPos = vector3(tar[1], tar[2], tar[3])
+		local targetAngle = vector3(tar[4], tar[5], tar[6])
+		local velocityPos = vector3(vel[1], vel[2], vel[3])
+		local velocityAngle = vector3(vel[4], vel[5], vel[6])
+
+		animating = (startPos - targetPos).Magnitude > epsilon
+			or velocityPos.Magnitude > epsilon
 			or (startAngle - targetAngle).Magnitude > epsilon
 			or velocityAngle.Magnitude > epsilon
-	elseif self.Type == "Color3" then
+	elseif self._type == "Color3" then
 		local startVector = vector3(position.R, position.G, position.B)
 		local velocityVector = vector3(velocity.R, velocity.G, velocity.B)
 		local targetVector = vector3(target.R, target.G, target.B)
@@ -307,16 +309,58 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Vector3)
 	end
 end
 
+--- Creates a new spring
+---@param initial Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The starting position of the spring
+---@param clock number function to use to update spring
+function Spring.new(initial: Springable, clock: (() -> number)?): Spring
+	local self = {}
+
+	initial = initial or 0
+
+	self._type = typeof(initial)
+
+	if self._type == "CFrame" then
+		initial = { initial.X, initial.Y, initial.Z, initial:ToEulerAnglesXYZ() }
+		self._target = table.clone(initial)
+		self._position0 = table.clone(initial)
+		self._velocity0 = { 0, 0, 0, 0, 0, 0 }
+	else
+		self._target = initial
+		self._position0 = initial
+		self._velocity0 = ZEROS[self._type]
+	end
+
+	self._clock = clock or os.clock
+	self._time0 = self._clock()
+	self._damper = 1
+	self._speed = 1
+	self._updating = false
+	self._isBound = false
+	self._callbacks = {}
+
+	return setmetatable(self, Spring)
+end
+
 function Spring:__index(index: string)
 	if Spring[index] then
 		return Spring[index]
 	elseif index == "Value" or index == "Position" or index == "p" then
 		local position, _ = self:_positionVelocity(self._clock())
+		if self._type == "CFrame" then
+			position = cframe(position[1], position[2], position[3]) * angles(position[4], position[5], position[6])
+		end
 		return position
 	elseif index == "Velocity" or index == "v" then
 		local _, velocity = self:_positionVelocity(self._clock())
+		if self._type == "CFrame" then
+			velocity = cframe(velocity[1], velocity[2], velocity[3]) * angles(velocity[4], velocity[5], velocity[6])
+		end
 		return velocity
 	elseif index == "Target" or index == "t" then
+		if self._type == "CFrame" then
+			return cframe(self._target[1], self._target[2], self._target[3])
+				* angles(self._target[4], self._target[5], self._target[6])
+		end
 		return self._target
 	elseif index == "Damper" or index == "d" then
 		return self._damper
@@ -336,19 +380,34 @@ function Spring:__newindex(index: string, value)
 
 	if index == "Value" or index == "Position" or index == "p" then
 		local _, velocity = self:_positionVelocity(now)
-		self._position0 = value
+		if self._type == "CFrame" then
+			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			self._position0 = table.clone(value)
+		else
+			self._position0 = value
+		end
 		self._velocity0 = velocity
 		self._time0 = now
 	elseif index == "Velocity" or index == "v" then
 		local position, _ = self:_positionVelocity(now)
 		self._position0 = position
-		self._velocity0 = value
+		if self._type == "CFrame" then
+			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			self._velocity0 = table.clone(value)
+		else
+			self._velocity0 = value
+		end
 		self._time0 = now
 	elseif index == "Target" or index == "t" then
 		local position, velocity = self:_positionVelocity(now)
 		self._position0 = position
 		self._velocity0 = velocity
-		self._target = value
+		if self._type == "CFrame" then
+			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			self._target = table.clone(value)
+		else
+			self._target = value
+		end
 		self._time0 = now
 	elseif index == "Damper" or index == "d" then
 		local position, velocity = self:_positionVelocity(now)
@@ -394,8 +453,8 @@ function Spring:_positionVelocity(now: number)
 		sine = ep * t
 	else
 		h = (damperSquared - 1) ^ 0.5
-		local u = EULER ^ (((-damper + h) * t)) / (2 * h)
-		local v = EULER ^ (((-damper - h) * t)) / (2 * h)
+		local u = EULER ^ ((-damper + h) * t) / (2 * h)
+		local v = EULER ^ ((-damper - h) * t) / (2 * h)
 		cosine = u + v
 		sine = u - v
 	end
