@@ -10,7 +10,7 @@
 		The number of segments per curve. The higher this number, the more
 		accurate the curve will be, but the more expensive it will be to
 		calculate
-]]--
+]]
 
 --[[ Properties
 
@@ -32,7 +32,7 @@
 		The number of segments per curve. The higher this number, the more
 		accurate the curve will be, but the more expensive it will be to
 		calculate. Default 10
-]]--
+]]
 
 --[[ Functions
 
@@ -64,26 +64,32 @@
 
 	:Destroy()
 		Destroys the spline curve.
-]]--
+]]
 
 --[[ Events
 
 	Destroying: () -> ()
 		Fires when the spline curve is destroyed.
-]]--
+]]
 
 -- Types
 
 export type Spline = {
-    ControlPoints: {CFrame},
-    Curve: Model,
+	ControlPoints: { CFrame },
+	Curve: Model,
 	Visible: boolean,
 	Parent: Instance?,
 
-    Destroy: (self: Spline) -> (),
-    GetCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
+	Destroy: (self: Spline) -> (),
+	GetCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
 	GetLinearCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
-	new: (curveModel: Model) -> Spline
+	new: (controlPoints: { CFrame }) -> Spline,
+
+	__index: (self: Spline, key: string) -> any,
+	__newindex: (self: Spline, key: string, value: any) -> any,
+
+	_drawCurve: (self: Spline) -> (),
+	_update: (self: Spline) -> (),
 }
 
 -- Constants
@@ -96,7 +102,7 @@ local Quaternion = require(script.Parent:WaitForChild("Quaternion")) ---@module 
 
 -- Main Module
 
-local Spline: Spline = {}
+local Spline: Spline = {} :: Spline
 
 Spline.__index = function(this, key)
 	if key == "Visible" then
@@ -142,18 +148,18 @@ local function CatmullRom(p0, p1, p2, p3)
 	return
 		-- The interpolated point at p1
 		p1,
-
 		-- The tangent at p1
 		0.5 * (p2 - p0),
-
 		-- The second derivative at p1
-		p0 - 2.5 * p1 + 2 * p2 - 0.5 * p3,
-
+		p0
+			- 2.5 * p1
+			+ 2 * p2
+			- 0.5 * p3,
 		-- The third derivative at p1
 		1.5 * (p1 - p2) + 0.5 * (p3 - p0)
 end
 
--- Performs speherical linear interpolation between two CFrames and returns the
+-- Performs spherical linear interpolation between two CFrames and returns the
 -- CFrame at the given alpha value
 local function Slerp(origin: CFrame, target: CFrame, alpha: number): CFrame
 	local position = origin.Position:Lerp(target.Position, alpha)
@@ -182,7 +188,7 @@ function Spline:_drawCurve()
 
 	local lastPoint = nil
 	for i = 0, (self._segments * controlPointCount) do
-        local alpha = i / (self._segments * controlPointCount)
+		local alpha = i / (self._segments * controlPointCount)
 		local cframe = self:GetCFrameFromAlpha(alpha)
 		local segmentIndex = 0
 
@@ -203,7 +209,7 @@ function Spline:_drawCurve()
 		point.Material = Enum.Material.Neon
 		point.Size = Vector3.new(0.1, 0.1, lastPoint and (lastPoint - cframe.Position).Magnitude or 0.1)
 		point.CFrame = CFrame.new(cframe.Position, lastPoint or cframe.Position) * CFrame.new(0, 0, -point.Size.Z * 0.5)
-        point:SetAttribute("Alpha", alpha)
+		point:SetAttribute("Alpha", alpha)
 		point.Parent = self.Curve
 
 		lastPoint = cframe.Position
@@ -232,7 +238,10 @@ function Spline:_update()
 
 				local interpolatedPoint, tangent, secondDerivative, thirdDerivative = CatmullRom(p0, p1, p2, p3)
 
-				local position = interpolatedPoint + (tangent * t) + (secondDerivative * t^2) + (thirdDerivative * t^3)
+				local position = interpolatedPoint
+					+ (tangent * t)
+					+ (secondDerivative * t ^ 2)
+					+ (thirdDerivative * t ^ 3)
 
 				length += (position - lastPosition).Magnitude
 
@@ -271,26 +280,31 @@ function Spline:GetCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")
 	local previousControlPoint, remainder = math.modf(segmentCount * alpha + 1)
 	local targetControlPoint = previousControlPoint + 1
 
-	local c0 = self._controlPoints[math.max(previousControlPoint - 1, 1)].Position
-	local c1 = self._controlPoints[previousControlPoint].Position
-	local c2 = self._controlPoints[targetControlPoint].Position
-	local c3 = self._controlPoints[math.min(targetControlPoint + 1, segmentCount + 1)].Position
+	local c0 = self._controlPoints[math.max(previousControlPoint - 1, 1)]
+	local c1 = self._controlPoints[previousControlPoint]
+	local c2 = self._controlPoints[targetControlPoint]
+	local c3 = self._controlPoints[math.min(targetControlPoint + 1, segmentCount + 1)]
 
-	local interpolatedPoint, tangent, secondDerivative, thirdDerivative = CatmullRom(c0, c1, c2, c3)
+	local interpolatedPoint, tangent, secondDerivative, thirdDerivative =
+		CatmullRom(c0.Position, c1.Position, c2.Position, c3.Position)
 
 	local position = interpolatedPoint
 		+ (tangent * remainder)
-		+ (secondDerivative * remainder^2)
-		+ (thirdDerivative * remainder^3)
+		+ (secondDerivative * remainder ^ 2)
+		+ (thirdDerivative * remainder ^ 3)
 
 	if alignment == "Track" then
-		local offsetTangent = tangent + (2 * secondDerivative * remainder) + (3 * thirdDerivative * remainder^2)
+		local offsetTangent = tangent + (2 * secondDerivative * remainder) + (3 * thirdDerivative * remainder ^ 2)
 
 		return CFrame.lookAt(position, position + offsetTangent)
 	else
 		local cubicInOutAlpha = remainder * remainder * (3 - 2 * remainder)
-
-		return CFrame.new(position) * Slerp(c1, c2, cubicInOutAlpha).Rotation
+		return CFrame.new(position) * c1:Lerp(c2, cubicInOutAlpha).Rotation
+		-- if c1.Rotation == c2.Rotation then
+		-- 	return CFrame.new(position) * c1.Rotation
+		-- else
+		-- 	return CFrame.new(position) * Slerp(c1, c2, cubicInOutAlpha).Rotation
+		-- end
 	end
 end
 
@@ -319,23 +333,33 @@ function Spline:GetLinearCFrameFromAlpha(alpha: number, alignment: ("Track" | "N
 
 	previousControlPoint = math.max(previousControlPoint, 1)
 
-	local c0 = self._controlPoints[previousControlPoint].Position
-	local c1 = self._controlPoints[targetControlPoint].Position
-	local c2 = self._controlPoints[math.min(targetControlPoint + 1, controlPointCount)].Position
-	local c3 = self._controlPoints[math.min(targetControlPoint + 2, controlPointCount)].Position
+	local c0 = self._controlPoints[previousControlPoint]
+	local c1 = self._controlPoints[targetControlPoint]
+	local c2 = self._controlPoints[math.min(targetControlPoint + 1, controlPointCount)]
+	local c3 = self._controlPoints[math.min(targetControlPoint + 2, controlPointCount)]
 
-	local interpolatedPoint, tangent, secondDerivative, thirdDerivative = CatmullRom(c0, c1, c2, c3)
+	local interpolatedPoint, tangent, secondDerivative, thirdDerivative =
+		CatmullRom(c0.Position, c1.Position, c2.Position, c3.Position)
 
-	local position = interpolatedPoint + (tangent * t) + (secondDerivative * t^2) + (thirdDerivative * t^3)
+	local position = interpolatedPoint + (tangent * t) + (secondDerivative * t ^ 2) + (thirdDerivative * t ^ 3)
 
 	if alignment == "Track" then
-		local offsetTangent = tangent + (2 * secondDerivative * t) + (3 * thirdDerivative * t^2)
+		local offsetTangent = tangent + (2 * secondDerivative * t) + (3 * thirdDerivative * t ^ 2)
 
 		return CFrame.lookAt(position, position + offsetTangent)
 	else
 		local cubicInOutAlpha = t * t * (3 - 2 * t)
+		return CFrame.new(position) * c1:Lerp(c2, cubicInOutAlpha).Rotation
+		-- Using Lerp temporarily because Slerp is still resulting in NaN
+		-- rotations and interpolating in strange ways. Might be how the
+		-- quaternions are being constructed, but I don't have time to deep dive
+		-- into that right now.
 
-		return CFrame.new(position) * Slerp(c1, c2, cubicInOutAlpha).Rotation
+		-- if c1.Rotation == c2.Rotation then
+		-- 	return CFrame.new(position) * c1.Rotation
+		-- else
+		-- 	return CFrame.new(position) * Slerp(c1, c2, cubicInOutAlpha).Rotation
+		-- end
 	end
 end
 
@@ -343,9 +367,9 @@ end
 function Spline:Destroy()
 	self._destroying:Fire()
 	self._destroying:Destroy()
-    self.Curve:Destroy()
+	self.Curve:Destroy()
 
-	for _, listener in (self._listeners) do
+	for _, listener in self._listeners do
 		listener:Disconnect()
 	end
 
@@ -357,10 +381,10 @@ end
 ---Constructor for the Spline class. Takes in a curve model and returns a new Spline object.
 ---@param controlPoints table A table of CFrame objects that will be used as control points for the spline.
 ---@return table Spline The new Spline object.
-function Spline.new(controlPoints: {CFrame}): Spline
-	local self: Spline = setmetatable({}, Spline)
+function Spline.new(controlPoints: { CFrame }): Spline
+	local self = setmetatable({}, Spline)
 
-	self._listeners = {} :: {RBXScriptConnection}
+	self._listeners = {} :: { RBXScriptConnection }
 	self._visible = false
 	self._parent = workspace
 	self._segments = 10

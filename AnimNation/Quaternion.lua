@@ -1,10 +1,12 @@
 --[[ File Info
+
     Author(s): ChiefWildin, EgoMoose
 
     A quaternion class implementation for Roblox. Based on EgoMoose's version
     (https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)
     provided under the open-source MIT license, then modified by ChiefWildin.
-]]--
+
+]]
 
 --[[ Properties
 
@@ -12,7 +14,7 @@
             The scalar part of the quaternion
         Vector: Vector3
             The vector part of the quaternion
-]]--
+]]
 
 --[[ Functions
 
@@ -42,11 +44,13 @@
 
 	:ToOrientation() -> Vector3
 		Returns the Orientation (in degrees) representation of the quaternion
-]]--
+]]
 
 -- Types
 
 export type Quaternion = {
+	ClassName: "Quaternion",
+
 	W: number,
 	Vector: Vector3,
 
@@ -58,23 +62,26 @@ export type Quaternion = {
 	AxisAngle: (self: Quaternion) -> (Vector3, number),
 	Slerp: (self: Quaternion, target: Quaternion, alpha: number) -> Quaternion,
 	ToCFrame: (self: Quaternion) -> CFrame,
+	ToOrientation: (self: Quaternion) -> Vector3,
 }
 
 -- Constructors
 
-local Quaternion: Quaternion = {__type = "Quaternion"}
+local Quaternion: Quaternion = { ClassName = "Quaternion" } :: Quaternion
 
 -- Constructs a new Quaternion object from a given scalar value and vector
 function Quaternion.new(w: number, v: Vector3): Quaternion
 	local self = setmetatable({}, {
 		__index = Quaternion,
 		__mul = function(x: Quaternion, y: Quaternion)
-			if y.__type and y.__type == "Quaternion" then
+			if y.ClassName and y.ClassName == "Quaternion" then
 				local WProduct = x.W * y.W - x.Vector:Dot(y.Vector)
 				local VectorProduct = x.Vector * y.W + y.Vector * x.W + x.Vector:Cross(y.Vector)
 
 				return Quaternion.new(WProduct, VectorProduct)
 			end
+
+			error(`Quaternion multiplication requires a Quaternion as the second operand, given {y}`)
 		end,
 		__pow = function(x: Quaternion, power: number)
 			local axis, angle = x:AxisAngle()
@@ -112,7 +119,7 @@ function Quaternion.fromCFrame(cframe: CFrame): Quaternion
 			local s = math.sqrt(1 - m00 + m11 - m22)
 			local r = 0.5 / s
 			return Quaternion.new((m02 - m20) * r, Vector3.new((m10 + m01) * r, 0.5 * s, (m21 + m12) * r))
-		elseif big == m22 then
+		else -- big == m22
 			local s = math.sqrt(1 - m00 - m11 + m22)
 			local r = 0.5 / s
 			return Quaternion.new((m10 - m01) * r, Vector3.new((m02 + m20) * r, (m21 + m12) * r, 0.5 * s))

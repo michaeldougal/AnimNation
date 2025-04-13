@@ -6,7 +6,7 @@
 	(https://github.com/Quenty/NevermoreEngine/blob/main/src/spring/src/Shared/Spring.lua)
 
 	Visualization (by Defaultio): https://www.desmos.com/calculator/hn2i9shxbz
---]]
+]]
 
 --[[ Properties
 
@@ -30,7 +30,7 @@
 
 	Type
 		Returns the type of value being tracked
---]]
+]]
 
 --[[ Functions
 
@@ -75,6 +75,7 @@ export type Spring = {
 
 local EULER = 2.7182818284590452353602874713527
 local EPSILON = 1e-4
+local PI2 = math.pi * 2
 local ZEROS = {
 	["number"] = 0,
 	["Vector2"] = Vector2.zero,
@@ -93,7 +94,7 @@ local udim2 = UDim2.new
 local udim = UDim.new
 local color3 = Color3.new
 local cframe = CFrame.new
-local angles = CFrame.Angles
+local angles = CFrame.fromEulerAnglesYXZ
 local vector3 = Vector3.new
 
 local function directConversion(a, b, sine, cosH, damperSin, speed, start, velocity, target)
@@ -135,7 +136,17 @@ local Converters = {
 				-b * start.Offset + b * target.Offset + e * velocity.Offset
 			)
 	end,
-	["CFrame"] = function(a, b, sine, cosH, damperSin, speed, start: {}, velocity: {}, target: {})
+	["CFrame"] = function(
+		a,
+		b,
+		sine,
+		cosH,
+		damperSin,
+		speed,
+		start: { number },
+		velocity: { number },
+		target: { number }
+	)
 		local c = 1 - a
 		local d = sine / speed
 		local e = cosH - damperSin
@@ -190,7 +201,7 @@ local VelocityConverters = {
 	["UDim2"] = directVelocity,
 	["UDim"] = directVelocity,
 	["CFrame"] = function(self, velocity)
-		velocity = {velocity.X, velocity.Y, velocity.Z, velocity:ToEulerAnglesXYZ()}
+		velocity = { velocity.X, velocity.Y, velocity.Z, velocity:ToEulerAnglesYXZ() }
 		self:_positionVelocity(self._clock())
 		self._velocity0 = {
 			self._velocity0[1] + velocity[1],
@@ -206,6 +217,17 @@ local VelocityConverters = {
 		self.Velocity = color3(self.Velocity.R + velocity.R, self.Velocity.G + velocity.G, self.Velocity.B + velocity.B)
 	end,
 }
+
+local function convertToClosestAngle(currentAngle, givenTargetAngle)
+	local backward = givenTargetAngle - currentAngle
+	local forward = PI2 + backward
+
+	if abs(forward) < abs(backward) then
+		return currentAngle + forward
+	else
+		return currentAngle + backward
+	end
+end
 
 --- Impulse the spring with a change in velocity
 ---@param velocity Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The velocity to impulse with
@@ -253,9 +275,9 @@ end
 function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 	epsilon = epsilon or EPSILON
 
-	local position = self.Position
-	local velocity = self.Velocity
-	local target = self.Target
+	local position, velocity = self:_positionVelocity(self._clock())
+	local isCFrame = self._type == "CFrame"
+	local target = isCFrame and self._target or self.Target
 	local animating
 
 	if self._type == "number" then
@@ -276,17 +298,13 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 			or abs(velocity.Scale) > epsilon
 			or abs(position.Offset - target.Offset) > epsilon
 			or abs(velocity.Offset) > epsilon
-	elseif self._type == "CFrame" then
-		local pos = self._position0
-		local vel = self._velocity0
-		local tar = self._target
-
-		local startPos = vector3(pos[1], pos[2], pos[3])
-		local startAngle = vector3(pos[4], pos[5], pos[6])
-		local targetPos = vector3(tar[1], tar[2], tar[3])
-		local targetAngle = vector3(tar[4], tar[5], tar[6])
-		local velocityPos = vector3(vel[1], vel[2], vel[3])
-		local velocityAngle = vector3(vel[4], vel[5], vel[6])
+	elseif isCFrame then
+		local startPos = vector3(position[1], position[2], position[3])
+		local startAngle = vector3(position[4], position[5], position[6])
+		local targetPos = vector3(target[1], target[2], target[3])
+		local targetAngle = vector3(target[4], target[5], target[6])
+		local velocityPos = vector3(velocity[1], velocity[2], velocity[3])
+		local velocityAngle = vector3(velocity[4], velocity[5], velocity[6])
 
 		animating = (startPos - targetPos).Magnitude > epsilon
 			or velocityPos.Magnitude > epsilon
@@ -302,11 +320,29 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 	end
 
 	if animating then
+		if isCFrame then
+			return true, cframe(position[1], position[2], position[3]) * angles(position[4], position[5], position[6])
+		end
 		return true, position
 	else
-		-- We need to return the target so we use the actual target value (i.e. pretend like the spring is asleep)
+		-- We need to return the target so we use the actual target value (i.e.
+		-- pretend like the spring is asleep)
+		if isCFrame then
+			return false, cframe(target[1], target[2], target[3]) * angles(target[4], target[5], target[6])
+		end
 		return false, target
 	end
+end
+
+-- Will disconnect any potential bindings, if they exist
+function Spring:Destroy()
+	for key in self._callbacks do
+		self:Unbind(key)
+	end
+end
+
+function Spring:Disconnect()
+	self:Destroy()
 end
 
 --- Creates a new spring
@@ -320,9 +356,10 @@ function Spring.new(initial: Springable, clock: (() -> number)?): Spring
 	self._type = typeof(initial)
 
 	if self._type == "CFrame" then
-		initial = { initial.X, initial.Y, initial.Z, initial:ToEulerAnglesXYZ() }
-		self._target = table.clone(initial)
-		self._position0 = table.clone(initial)
+		local cframe = initial :: CFrame
+		local unpacked = { cframe.X, cframe.Y, cframe.Z, cframe:ToEulerAnglesYXZ() }
+		self._target = table.clone(unpacked)
+		self._position0 = table.clone(unpacked)
 		self._velocity0 = { 0, 0, 0, 0, 0, 0 }
 	else
 		self._target = initial
@@ -330,7 +367,7 @@ function Spring.new(initial: Springable, clock: (() -> number)?): Spring
 		self._velocity0 = ZEROS[self._type]
 	end
 
-	self._clock = clock or os.clock
+	self._clock = clock or tick
 	self._time0 = self._clock()
 	self._damper = 1
 	self._speed = 1
@@ -381,7 +418,7 @@ function Spring:__newindex(index: string, value)
 	if index == "Value" or index == "Position" or index == "p" then
 		local _, velocity = self:_positionVelocity(now)
 		if self._type == "CFrame" then
-			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			value = { value.X, value.Y, value.Z, value:ToEulerAnglesYXZ() }
 			self._position0 = table.clone(value)
 		else
 			self._position0 = value
@@ -392,7 +429,7 @@ function Spring:__newindex(index: string, value)
 		local position, _ = self:_positionVelocity(now)
 		self._position0 = position
 		if self._type == "CFrame" then
-			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			value = { value.X, value.Y, value.Z, value:ToEulerAnglesYXZ() }
 			self._velocity0 = table.clone(value)
 		else
 			self._velocity0 = value
@@ -403,7 +440,16 @@ function Spring:__newindex(index: string, value)
 		self._position0 = position
 		self._velocity0 = velocity
 		if self._type == "CFrame" then
-			value = { value.X, value.Y, value.Z, value:ToEulerAnglesXYZ() }
+			local posRotX, posRotY, posRotZ = position[4], position[5], position[6]
+			local targetRotX, targetRotY, targetRotZ = value:ToEulerAnglesYXZ()
+			value = {
+				value.X,
+				value.Y,
+				value.Z,
+				convertToClosestAngle(posRotX, targetRotX),
+				convertToClosestAngle(posRotY, targetRotY),
+				convertToClosestAngle(posRotZ, targetRotZ),
+			}
 			self._target = table.clone(value)
 		else
 			self._target = value
@@ -468,18 +514,26 @@ function Spring:_positionVelocity(now: number)
 end
 
 function Spring:_updateCallbacks()
-	if self._isBound and not self._updating then
-		task.spawn(function()
-			self._updating = true
-			while self:IsAnimating() do
-				for _, callback in pairs(self._callbacks) do
-					callback(self.Position, self.Velocity)
-				end
-				task.wait()
-			end
-			self._updating = false
-		end)
+	if not self._isBound or self._updating then
+		return
 	end
+
+	self._updating = true
+
+	task.spawn(function()
+		while self:IsAnimating() do
+			for _, callback in self._callbacks do
+				task.spawn(callback, self.Position, self.Velocity)
+			end
+			task.wait()
+		end
+		-- One more pass because callbacks may not have been called with the
+		-- final values (happens frequently during low frame rates)
+		for _, callback in self._callbacks do
+			task.spawn(callback, self.Position, self.Velocity)
+		end
+		self._updating = false
+	end)
 end
 
 return Spring
