@@ -1,11 +1,11 @@
 --[[ File Info
-	Author: ChiefWildin
+	Author(s): ChiefWildin
 	Created: 10/12/2022
-	Version: 1.8.0
+	Version: 1.11.0
 
 	A streamlined Roblox animation utility that simplifies the use of springs
 	and tweens on object properties.
---]]
+]]
 
 --[[ Types
 
@@ -37,7 +37,7 @@
 		RepeatCount = RepeatCount | Repeat | rc
 		Reverses = Reverses | Reverse | r
 		DelayTime = DelayTime | Delay | dt
---]]
+]]
 
 --[[ Tweens
 
@@ -73,7 +73,7 @@
 
 	.getTweenFromInstance(object: Instance): Tween?
 		Returns the last tween played on the given object, or nil if none exists
---]]
+]]
 
 --[[ Springs
 
@@ -111,7 +111,7 @@
 		Returns the spring with the given name. If none exists, it will return
 		nil with a warning, or an error depending on the set ERROR_POLICY.
 		Aliases: .inquire()
---]]
+]]
 
 --[[ Splines
 
@@ -137,7 +137,7 @@
 		or an array of points to create a new one from. Currently supports
 		number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and any other type
 		that supports scalar multiplication/addition.
---]]
+]]
 
 -- Services
 
@@ -190,8 +190,8 @@ end
 -- Classes and Types
 
 type Springable = Spring.Springable
-type Spring = Spring.Spring
-type Spline = Spline.Spline
+export type Spring = Spring.Spring
+export type Spline = Spline.Spline
 
 export type SpringInfo = {
 	Position: Springable?,
@@ -206,12 +206,20 @@ export type SpringInfo = {
 export type AnimChain = {
 	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
 	Await: (AnimChain) -> AnimChain,
+
+	new: (animators: { Spring | Tween }?) -> AnimChain,
+
+	_addAnimator: (AnimChain, animator: Spring | Tween) -> (),
+	_processCallbackQueue: (AnimChain) -> (),
+	_waitForAnimationsCompleted: (AnimChain) -> (),
+
+	__index: AnimChain,
 }
 
-local AnimChain: AnimChain = {}
+local AnimChain: AnimChain = {} :: AnimChain
 AnimChain.__index = AnimChain
 
-function AnimChain.new(animators: {Spring | Tween})
+function AnimChain.new(animators: { Spring | Tween }?)
 	local self = setmetatable({}, AnimChain)
 
 	self._animators = animators or {}
@@ -244,8 +252,11 @@ function AnimChain:_waitForAnimationsCompleted()
 				task.wait()
 			end
 		elseif typeof(animator) == "Instance" then -- Tween
-			while animator.PlaybackState ~= Enum.PlaybackState.Completed do
-				animator.Completed:Wait()
+			while
+				animator.PlaybackState ~= Enum.PlaybackState.Completed
+				and animator.PlaybackState ~= Enum.PlaybackState.Cancelled
+			do
+				animator:GetPropertyChangedSignal("PlaybackState"):Wait()
 			end
 		end
 	end
@@ -307,7 +318,7 @@ local TweenDirectory: { [Instance]: Tween } = {}
 
 -- A dictionary that keeps track of the states of NumberSequence/ColorSequence
 -- values.
-local ActiveSequences: { [Instance]: { [string]: { [string]: NumberValue | Color3Value } } } = {}
+local ActiveSequences: { [Instance]: { [string]: { [number]: NumberValue | Color3Value } } } = {}
 
 -- A dictionary that keeps track of any custom tween processes (tweenFromAlpha).
 -- Instances are used as keys to a sub-dictionary that maps properties to the
@@ -337,7 +348,12 @@ local function murderTweenWhenDone(tween: Tween)
 	end
 end
 
-local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {}, waitToKill: boolean?): AnimChain
+local function tweenByPivot(
+	object: Model,
+	tweenInfo: TweenInfo | { [string]: any },
+	properties: {},
+	waitToKill: boolean?
+): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by pivot failure - invalid object passed")
 		if waitToKill then
@@ -360,7 +376,12 @@ local function tweenByPivot(object: Model, tweenInfo: TweenInfo, properties: {},
 	return AnimNation.tween(fakeCenter, tweenInfo, properties, waitToKill)
 end
 
-local function tweenByScale(object: Model, tweenInfo: TweenInfo, properties: {}, waitToKill: boolean?): AnimChain
+local function tweenByScale(
+	object: Model,
+	tweenInfo: TweenInfo | { [string]: any },
+	properties: { [string]: any },
+	waitToKill: boolean?
+): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by scale failure - invalid object passed")
 		if waitToKill then
@@ -386,10 +407,11 @@ local function tweenByScale(object: Model, tweenInfo: TweenInfo, properties: {},
 	return AnimNation.tween(scaleRef, tweenInfo, properties, waitToKill)
 end
 
-local function tweenSequence(
+local function animateSequence(
 	object: Instance,
 	sequenceName: string,
-	tweenInfo: TweenInfo,
+	method: "tween" | "target",
+	methodInfo: TweenInfo | SpringInfo,
 	newSequence: NumberSequence | ColorSequence,
 	waitToKill: boolean?
 ): AnimChain
@@ -397,14 +419,18 @@ local function tweenSequence(
 	local sequenceType = typeof(originalSequence)
 	local numPoints = #originalSequence.Keypoints
 	if numPoints ~= #newSequence.Keypoints then
-		error("Tween sequence failure - keypoint count mismatch")
-		if waitToKill then
-			task.wait(tweenInfo.Time)
+		error("Animate sequence failure - keypoint count mismatch")
+		if waitToKill and methodInfo.Time then
+			task.wait(methodInfo.Time)
 		end
 		return AnimChain.new()
 	end
 
 	local function updateSequence()
+		if not ActiveSequences[object] or not ActiveSequences[object][sequenceName] then
+			return
+		end
+
 		local newKeypoints = table.create(numPoints)
 		for index, point in pairs(ActiveSequences[object][sequenceName]) do
 			if sequenceType == "NumberSequence" then
@@ -428,6 +454,8 @@ local function tweenSequence(
 		ActiveSequences[object][sequenceName] = table.create(numPoints)
 
 		for index, keypoint in pairs(originalSequence.Keypoints) do
+			-- Set up value Instances that we'll use to track and modify each
+			-- keypoint of the sequence
 			local point
 			if sequenceType == "NumberSequence" then
 				point = {
@@ -455,22 +483,22 @@ local function tweenSequence(
 		end
 	end
 
-	for index, _ in pairs(originalSequence.Keypoints) do
+	for index in pairs(originalSequence.Keypoints) do
 		local point = ActiveSequences[object][sequenceName][index]
 		local isLast = index == numPoints
 		local shouldWait = isLast and waitToKill
 		if sequenceType == "NumberSequence" then
-			AnimNation.tween(point.Envelope, tweenInfo, { Value = newSequence.Keypoints[index].Envelope })
+			AnimNation[method](point.Envelope, methodInfo, { Value = newSequence.Keypoints[index].Envelope })
 		end
-		AnimNation.tween(point.Value, tweenInfo, { Value = newSequence.Keypoints[index].Value })
-		local tweenObject = AnimNation.tween(
+		AnimNation[method](point.Value, methodInfo, { Value = newSequence.Keypoints[index].Value })
+		local animChain = AnimNation[method](
 			point.Time,
-			tweenInfo,
+			methodInfo,
 			{ Value = newSequence.Keypoints[index].Time },
 			shouldWait
 		)
 			:AndThen(function()
-				if index == numPoints then
+				if index == numPoints and ActiveSequences[object] then
 					for _, pointData in pairs(ActiveSequences[object][sequenceName]) do
 						pointData.Value:Destroy()
 						pointData.Time:Destroy()
@@ -481,12 +509,12 @@ local function tweenSequence(
 
 					ActiveSequences[object][sequenceName] = nil
 
-					local remainingTweens = 0
+					local remainingAnims = 0
 					for _, _ in pairs(ActiveSequences[object]) do
-						remainingTweens += 1
+						remainingAnims += 1
 						break
 					end
-					if remainingTweens == 0 then
+					if remainingAnims == 0 then
 						ActiveSequences[object] = nil
 					end
 
@@ -495,12 +523,12 @@ local function tweenSequence(
 			end)
 
 		if isLast then
-			return tweenObject
+			return animChain
 		end
 	end
 end
 
-local function createTweenInfoFromTable(info: {})
+local function createTweenInfoFromTable(info: { [string]: any })
 	return TweenInfo.new(
 		info.Time or info.t or 1,
 		info.EasingStyle or info.Style or info.s or Enum.EasingStyle.Quad,
@@ -521,7 +549,7 @@ local function createSpringFromInfo(springInfo: SpringInfo): Spring
 	return spring
 end
 
-local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo): Spring
+local function updateSpringFromInfo(spring: Spring, springInfo: SpringInfo)
 	for key, value in pairs(springInfo) do
 		if key ~= "Initial" and key ~= "i" and key ~= "Clock" and key ~= "Position" then
 			spring[key] = value
@@ -628,11 +656,19 @@ end
 -- recommended to use `:Await()` instead to yield until the animation has
 -- completed.
 function AnimNation.tween(
-	object: Instance,
-	tweenInfo: TweenInfo | {},
+	object: Instance | { Instance },
+	tweenInfo: TweenInfo | { [string]: any },
 	properties: { [string]: any },
 	waitToKill: boolean?
 ): AnimChain
+	if typeof(object) == "table" then
+		local lastChain
+		for _, obj in object do
+			lastChain = AnimNation.tween(obj, tweenInfo, properties, waitToKill)
+		end
+		return lastChain
+	end
+
 	if not object then
 		error("Tween failure - invalid object passed")
 		if waitToKill then
@@ -657,15 +693,17 @@ function AnimNation.tween(
 
 	for property, newValue in pairs(properties) do
 		if isPVInstance and not isPivot and property == "CFrame" then
-			alternativeAnimChain = tweenByPivot(object, tweenInfo, { CFrame = newValue })
+			local model: Model = object :: Model
+			alternativeAnimChain = tweenByPivot(model, tweenInfo, { CFrame = newValue })
 			properties[property] = nil
 		elseif isModel and not isScale and property == "Scale" then
-			alternativeAnimChain = tweenByScale(object, tweenInfo, { Scale = newValue })
+			local model: Model = object :: Model
+			alternativeAnimChain = tweenByScale(model, tweenInfo, { Scale = newValue })
 			properties[property] = nil
 		else
 			local propertyType = typeof(object[property])
 			if propertyType == "ColorSequence" or propertyType == "NumberSequence" then
-				alternativeAnimChain = tweenSequence(object, property, tweenInfo, newValue)
+				alternativeAnimChain = animateSequence(object, property, "tween", tweenInfo, newValue)
 				properties[property] = nil
 			else
 				normalCount += 1
@@ -681,7 +719,7 @@ function AnimNation.tween(
 	end
 
 	local thisTween = TweenService:Create(object, tweenInfo, properties)
-	local tweenChain = AnimChain.new({thisTween})
+	local tweenChain = AnimChain.new({ thisTween })
 
 	thisTween:Play()
 	TweenDirectory[object] = thisTween
@@ -708,21 +746,24 @@ end
 -- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
 -- any other type that supports scalar multiplication/addition.
 function AnimNation.tweenFromAlpha(
-	object: Instance,
-	tweenInfo: TweenInfo | {},
+	objects: Instance | { Instance },
+	tweenInfo: TweenInfo | { [string]: any },
 	properties: { [string]: any },
 	alpha: number,
-	waitToKill: boolean?
+	yield: boolean?
 )
+	if typeof(objects) == "table" then
+		for _, obj in objects do
+			AnimNation.tweenFromAlpha(obj, tweenInfo, properties, alpha, yield)
+		end
+	end
+
+	local object: Instance = objects :: Instance
+
 	if typeof(alpha) ~= "number" then
 		error("Tween failure - alpha must be a number")
-		return AnimChain.new()
 	elseif not object then
 		error("Tween failure - invalid object passed")
-		if waitToKill then
-			task.wait(tweenInfo.Time * (1 - alpha))
-		end
-		return AnimChain.new()
 	end
 
 	alpha = math.clamp(alpha, 0, 1)
@@ -743,9 +784,12 @@ function AnimNation.tweenFromAlpha(
 	local startingProperties = {}
 	local isPVInstance = object:IsA("PVInstance")
 	local isModel = object:IsA("Model")
+	local model: Model = object :: Model
 
 	for property, value in pairs(properties) do
-		startingProperties[property] = if isPVInstance and property == "CFrame" then object:GetPivot() else object[property]
+		startingProperties[property] = if isPVInstance and property == "CFrame"
+			then model:GetPivot()
+			else object[property]
 		firstIteration[property] = lerp(startingProperties[property], value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
@@ -753,7 +797,7 @@ function AnimNation.tweenFromAlpha(
 
 	-- Instantly apply starting values through TweenService, overriding any
 	-- regular tweens from calling .tween()
-	AnimNation.tween(object, {t = 0, _skipControlReset = true}, firstIteration, true)
+	AnimNation.tween(object, { t = 0, _skipControlReset = true }, firstIteration):Await()
 
 	-- Perform remainder of tween
 	local function performTween()
@@ -775,9 +819,9 @@ function AnimNation.tweenFromAlpha(
 					if tweenId == thisTweenId then
 						local newValue = lerp(startingProperties[property], properties[property], currentAlpha)
 						if isPVInstance and property == "CFrame" then
-							object:PivotTo(newValue)
+							model:PivotTo(newValue)
 						elseif isModel and property == "Scale" then
-							object:ScaleTo(newValue)
+							model:ScaleTo(newValue)
 						else
 							object[property] = newValue
 						end
@@ -798,34 +842,34 @@ function AnimNation.tweenFromAlpha(
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
 					if isPVInstance and property == "CFrame" then
-						object:PivotTo(properties[property])
+						model:PivotTo(properties[property])
 					elseif isModel and property == "Scale" then
-						object:ScaleTo(properties[property])
+						model:ScaleTo(properties[property])
 					else
 						object[property] = properties[property]
 					end
 				end
 			end
-		end
 
-		if CustomTweens[object] then
 			-- Clean up now that the tween has finished
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
 					CustomTweens[object][property] = nil
 				end
 			end
+
 			-- If there are still any other tweens playing on this object, we're
 			-- done
 			for _, _ in CustomTweens[object] do
 				return
 			end
+
 			-- Otherwise, clean up the table
 			CustomTweens[object] = nil
 		end
 	end
 
-	if waitToKill then
+	if yield then
 		performTween()
 	else
 		task.spawn(performTween)
@@ -845,11 +889,18 @@ end
 -- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
 -- any other type that supports scalar multiplication/addition.
 function AnimNation.lerp(
-	object: Instance,
-	tweenInfo: TweenInfo | {},
+	object: Instance | { Instance },
+	tweenInfo: TweenInfo | { [string]: any },
 	properties: { [string]: any },
 	alpha: number
 )
+	if typeof(object) == "table" then
+		for _, obj in object do
+			AnimNation.lerp(obj, tweenInfo, properties, alpha)
+		end
+		return
+	end
+
 	if typeof(alpha) ~= "number" then
 		error("Lerp failure - alpha must be a number")
 		return
@@ -867,13 +918,15 @@ function AnimNation.lerp(
 	local startingAlpha = TweenService:GetValue(alpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
 	local lerpedValues = {}
 	for property, value in pairs(properties) do
-		local start = if object:IsA("PVInstance") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
+		local start = if object:IsA("PVInstance") and typeof(value) == "CFrame"
+			then object:GetPivot()
+			else object[property]
 		lerpedValues[property] = lerp(start, value, startingAlpha)
 	end
 
 	-- Instantly apply starting values, overriding any other tweens on this
 	-- object
-	AnimNation.tween(object, TweenInfo.new(0), lerpedValues, true)
+	AnimNation.tween(object, TweenInfo.new(0), lerpedValues):Await()
 end
 
 -- Asynchronously performs a spring impulse on the given object.
@@ -883,11 +936,19 @@ end
 -- highly recommended to use `:Await()` instead to yield until the animation has
 -- completed.
 function AnimNation.impulse(
-	object: Instance,
+	object: Instance | { Instance },
 	springInfo: SpringInfo,
 	properties: { [string]: any },
 	waitToKill: boolean?
 ): AnimChain
+	if typeof(object) == "table" then
+		local lastChain
+		for _, obj in object do
+			lastChain = AnimNation.impulse(obj, springInfo, properties, waitToKill)
+		end
+		return lastChain
+	end
+
 	if not object then
 		error("Spring failure - invalid object passed")
 		return AnimChain.new()
@@ -903,10 +964,11 @@ function AnimNation.impulse(
 		if SUPPORTED_TYPES[impulseType] then
 			local needsAnimationLink = true
 
+			local model: Model = object :: Model
 			if isPVInstance and property == "CFrame" then
-				springInfo.Initial = object:GetPivot()
+				springInfo.Initial = model:GetPivot()
 			elseif isModel and property == "Scale" then
-				springInfo.Initial = object:GetScale()
+				springInfo.Initial = model:GetScale()
 			else
 				springInfo.Initial = object[property]
 			end
@@ -927,7 +989,7 @@ function AnimNation.impulse(
 			local newSpring = SpringEvents[object][property]
 
 			if not animChain then
-				animChain = AnimChain.new({newSpring})
+				animChain = AnimChain.new({ newSpring })
 			else
 				animChain:_addAnimator(newSpring)
 			end
@@ -965,14 +1027,23 @@ end
 -- highly recommended to use `:Await()` instead to yield until the animation has
 -- completed.
 function AnimNation.target(
-	object: Instance,
+	object: Instance | { Instance },
 	springInfo: SpringInfo,
 	properties: { [string]: any },
 	waitToKill: boolean?
 ): AnimChain
+	if typeof(object) == "table" then
+		local lastChain
+		for _, obj in object do
+			lastChain = AnimNation.target(obj, springInfo, properties, waitToKill)
+		end
+		return lastChain
+	end
+
 	local springsWorking = 0
 	local animChain = AnimChain.new()
 
+	--TODO: Add sequence support
 	for property, target in pairs(properties) do
 		local targetZero = ZEROS[typeof(target)]
 		if not targetZero then
@@ -1026,38 +1097,40 @@ function AnimNation.createSpring(springInfo: SpringInfo, name: string?): Spring
 	if name then
 		SpringDirectory[name] = newSpring
 	end
+
 	return newSpring
 end
 
 -- Returns the spring with the given name. If none exists, it will return `nil`
 -- with a warning, or an error depending on the set `ERROR_POLICY`.
-function AnimNation.getSpring(name: string): Spring?
-	if SpringDirectory[name] then
-		return SpringDirectory[name]
-	else
+function AnimNation.getSpring(name: string): Spring
+	if not SpringDirectory[name] then
 		error(string.format("Spring '%s' does not exist", name))
 	end
+
+	return SpringDirectory[name]
 end
 
 -- Creates a new spline from the given control points. This should be a table of
 -- CFrame values with at least 4 entries. Optionally allows you to provide a
 -- name for lookup with `AnimNation.getSpline()`.
-function AnimNation.createSpline(controlPoints: {CFrame}, name: string?): Spline
+function AnimNation.createSpline(controlPoints: { CFrame }, name: string?): Spline
 	local newSpline = Spline.new(controlPoints) :: Spline
 	if name then
 		SplineDirectory[name] = newSpline
 	end
+
 	return newSpline
 end
 
 ---Returns the spline with the given name. If none exists, it will return `nil`
 -- with a warning, or an error depending on the set `ERROR_POLICY`.
 function AnimNation.getSpline(name: string): Spline?
-	if SplineDirectory[name] then
-		return SplineDirectory[name]
-	else
+	if not SplineDirectory[name] then
 		error(string.format("Spline '%s' does not exist", name))
 	end
+
+	return SplineDirectory[name]
 end
 
 -- Asynchronously performs tween-based spherical interpolation on the given
@@ -1073,37 +1146,28 @@ end
 -- any other type that supports scalar multiplication/addition.
 function AnimNation.slerpTweenFromAlpha(
 	object: Instance,
-	tweenInfo: TweenInfo | {},
-	spline: Spline | {CFrame},
+	tweenInfo: TweenInfo | { [string]: any },
+	splineInfo: Spline | { CFrame },
 	alignment: ("Track" | "Nodes")?,
 	alpha: number?,
-	waitToKill: boolean?
+	yield: boolean?
 )
-	alpha = alpha or 0
+	local initialAlpha = alpha or 0
 	alignment = alignment or "Nodes"
 
-	if typeof(alpha) ~= "number" then
+	if typeof(initialAlpha) ~= "number" then
 		error("Slerp tween failure - alpha must be a number")
-		return AnimChain.new()
-	elseif typeof(spline) ~= "table" then
+	elseif typeof(splineInfo) ~= "table" then
 		error("Slerp tween failure - spline must be a table")
-		return AnimChain.new()
 	elseif alignment ~= "Track" and alignment ~= "Nodes" then
 		error("Slerp tween failure - alignment must be 'Track' or 'Nodes'")
-		return AnimChain.new()
 	elseif not object then
 		error("Slerp tween failure - invalid object passed")
-		if waitToKill then
-			task.wait(tweenInfo.Time * (1 - alpha))
-		end
-		return AnimChain.new()
 	end
 
-	if spline[1] then
-		spline = Spline.new(spline)
-	end
+	local spline: Spline = splineInfo[1] and Spline.new(splineInfo) or splineInfo :: Spline
 
-	alpha = math.clamp(alpha, 0, 1)
+	initialAlpha = math.clamp(initialAlpha, 0, 1)
 
 	if typeof(tweenInfo) == "table" then
 		tweenInfo = createTweenInfoFromTable(tweenInfo)
@@ -1116,15 +1180,18 @@ function AnimNation.slerpTweenFromAlpha(
 		CustomTweens[object] = {}
 	end
 
-	local startingAlpha = TweenService:GetValue(alpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
+	local startingAlpha = TweenService:GetValue(initialAlpha, tweenInfo.EasingStyle, tweenInfo.EasingDirection)
 	local firstIteration = {}
-	local startingProperties = {CFrame = spline:GetLinearCFrameFromAlpha(0, alignment)}
-	local properties = {CFrame = spline:GetLinearCFrameAtAlpha(1, alignment)}
+	local startingProperties = { CFrame = spline:GetLinearCFrameFromAlpha(0, alignment) }
+	local properties = { CFrame = spline:GetLinearCFrameFromAlpha(1, alignment) }
 	local isPVInstance = object:IsA("PVInstance")
 	local isModel = object:IsA("Model")
+	local model: Model = object :: Model
 
 	for property, value in pairs(properties) do
-		startingProperties[property] = if object:IsA("PVInstance") and typeof(value) == "CFrame" then object:GetPivot() else object[property]
+		startingProperties[property] = if object:IsA("PVInstance") and typeof(value) == "CFrame"
+			then object:GetPivot()
+			else object[property]
 		firstIteration[property] = lerp(startingProperties[property], value, startingAlpha)
 		-- Set custom tween control to this process
 		CustomTweens[object][property] = thisTweenId
@@ -1132,11 +1199,11 @@ function AnimNation.slerpTweenFromAlpha(
 
 	-- Instantly apply starting values through TweenService, overriding any
 	-- regular tweens from calling .tween()
-	AnimNation.tween(object, {t = 0, _skipControlReset = true}, firstIteration, true)
+	AnimNation.tween(object, { t = 0, _skipControlReset = true }, firstIteration):Await()
 
 	-- Perform remainder of tween
 	local function performTween()
-		local remainingAlpha = 1 - alpha
+		local remainingAlpha = 1 - initialAlpha
 		local tweenLength = tweenInfo.Time * remainingAlpha
 		local endTime = os.clock() + tweenLength
 		while os.clock() < endTime do
@@ -1144,7 +1211,7 @@ function AnimNation.slerpTweenFromAlpha(
 			if CustomTweens[object] then
 				local percentComplete = 1 - ((endTime - os.clock()) / tweenLength)
 				local currentAlpha = TweenService:GetValue(
-					alpha + (remainingAlpha * percentComplete),
+					initialAlpha + (remainingAlpha * percentComplete),
 					tweenInfo.EasingStyle,
 					tweenInfo.EasingDirection
 				)
@@ -1154,9 +1221,9 @@ function AnimNation.slerpTweenFromAlpha(
 					if tweenId == thisTweenId then
 						local newValue = spline:GetCFrameFromAlpha(currentAlpha, alignment)
 						if isPVInstance and property == "CFrame" then
-							object:PivotTo(newValue)
+							model:PivotTo(newValue)
 						elseif isModel and property == "Scale" then
-							object:ScaleTo(newValue)
+							model:ScaleTo(newValue)
 						else
 							object[property] = newValue
 						end
@@ -1177,34 +1244,34 @@ function AnimNation.slerpTweenFromAlpha(
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
 					if isPVInstance and property == "CFrame" then
-						object:PivotTo(properties[property])
+						model:PivotTo(properties[property])
 					elseif isModel and property == "Scale" then
-						object:ScaleTo(properties[property])
+						model:ScaleTo(properties[property])
 					else
 						object[property] = properties[property]
 					end
 				end
 			end
-		end
 
-		if CustomTweens[object] then
 			-- Clean up now that the tween has finished
 			for property, tweenId in pairs(CustomTweens[object]) do
 				if tweenId == thisTweenId then
 					CustomTweens[object][property] = nil
 				end
 			end
+
 			-- If there are still any other tweens playing on this object, we're
 			-- done
-			for _, _ in CustomTweens[object] do
+			for _ in CustomTweens[object] do
 				return
 			end
+
 			-- Otherwise, clean up the table
 			CustomTweens[object] = nil
 		end
 	end
 
-	if waitToKill then
+	if yield then
 		performTween()
 	else
 		task.spawn(performTween)
