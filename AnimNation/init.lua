@@ -1,10 +1,9 @@
 --[[ File Info
 	Author(s): ChiefWildin
-	Created: 10/12/2022
-	Version: 1.11.0
+	Version: 1.11.2
 
-	A streamlined Roblox animation utility that simplifies the use of springs
-	and tweens on object properties.
+	An animation library that enables quick one-shot style animations for most
+	instances and properties.
 ]]
 
 --[[ Types
