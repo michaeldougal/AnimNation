@@ -1,6 +1,6 @@
 --[[ File Info
 	Author(s): ChiefWildin
-	Version: 1.11.2-theblock
+	Version: 1.12.0
 ]]
 
 --[[ Types
