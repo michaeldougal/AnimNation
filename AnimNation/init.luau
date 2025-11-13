@@ -3,38 +3,6 @@
 	Version: 1.12.0
 ]]
 
---[[ Types
-
-	AnimChain
-	    An object that can be used to link functionality to the end of an
-	    animation. :AndThen() can be used to link a callback, and :Await() can
-	    be used to wait for the animation to complete. These links are processed
-	    in the order they are called in.
-
-	SpringInfo
-		A dictionary of spring properties such as {s = 10, d = 0.5}. Can be
-		constructed using any keys that you could use to create a Spring object.
-		Possible keys:
-		Initial = Initial | i
-		Speed = Speed | s
-		Damper = Damper | d
-		Target = Target | t
-		Velocity = Velocity | v
-		Position = Position | Value | p
-		Clock = Clock
-
-	TweenInfo
-		TweenInfo can be passed to the tweening functions as either a TweenInfo
-		object or a dictionary of the desired parameters. Keys are either the
-		TweenInfo parameter name or shortened versions:
-		Time = Time | t
-		EasingStyle = EasingStyle | Style | s
-		EasingDirection = EasingDirection | Direction | d
-		RepeatCount = RepeatCount | Repeat | rc
-		Reverses = Reverses | Reverse | r
-		DelayTime = DelayTime | Delay | dt
-]]
-
 -- Services
 
 local RunService = game:GetService("RunService")
@@ -125,7 +93,19 @@ export type Spline = Spline.Spline
 	@field Initial Springable?
 	@field Clock (() -> number)?
 
-	A table used to set up parameters for a Spring.
+	A dictionary of spring properties such as {s = 10, d = 0.5}. Can be
+	constructed using any keys that you could use to create a Spring object.
+
+	Possible keys:
+	```
+	Initial = Initial | i
+	Speed = Speed | s
+	Damper = Damper | d
+	Target = Target | t
+	Velocity = Velocity | v
+	Position = Position | Value | p
+	Clock = Clock
+	```
 ]=]
 export type SpringInfo = {
 	Position: Springable?,
@@ -160,6 +140,53 @@ export type AnimChain = {
 	_waitForAnimationsCompleted: (AnimChain) -> (),
 
 	__index: AnimChain,
+}
+
+--[=[
+	@interface TweenInfoTable
+	@within AnimNation
+	@field Time number?
+	@field EasingStyle Enum.EasingStyle?
+	@field EasingDirection Enum.EasingDirection?
+	@field RepeatCount number?
+	@field Reverses boolean?
+	@field DelayTime number?
+
+	TweenInfo can be passed to the tweening functions as either a TweenInfo
+	object or a dictionary of the desired parameters. Keys are either the
+	TweenInfo parameter name or shortened versions:
+	```
+	Time = Time | t
+	EasingStyle = EasingStyle | Style | s
+	EasingDirection = EasingDirection | Direction | d
+	RepeatCount = RepeatCount | Repeat | rc
+	Reverses = Reverses | Reverse | r
+	DelayTime = DelayTime | Delay | dt
+	```
+]=]
+export type TweenInfoTable = {
+	Time: number?,
+	t: number?,
+
+	EasingStyle: Enum.EasingStyle?,
+	Style: Enum.EasingStyle?,
+	s: Enum.EasingStyle?,
+
+	EasingDirection: Enum.EasingDirection?,
+	Direction: Enum.EasingDirection?,
+	d: Enum.EasingDirection?,
+
+	RepeatCount: number?,
+	Repeat: number?,
+	rc: number?,
+
+	Reverses: boolean?,
+	Reverse: boolean?,
+	r: boolean?,
+
+	DelayTime: number?,
+	Delay: number?,
+	dt: number?,
 }
 
 local AnimChain: AnimChain = {} :: AnimChain
@@ -296,7 +323,7 @@ end
 
 local function tweenByPivot(
 	object: Model,
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	properties: {},
 	waitToKill: boolean?
 ): AnimChain
@@ -324,7 +351,7 @@ end
 
 local function tweenByScale(
 	object: Model,
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	properties: { [string]: any },
 	waitToKill: boolean?
 ): AnimChain
@@ -607,13 +634,13 @@ end
 	```
 
 	@param object Instance | { Instance } -- The object or objects to apply the tween to.
-	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param tweenInfo TweenInfo | TweenInfoTable -- The tween information or a table of tween parameters.
 	@param properties { [string]: any } -- A dictionary of properties to tween to.
 	@return AnimChain -- An AnimChain representing the tween.
 ]=]
 function AnimNation.tween(
 	object: Instance | { Instance },
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	properties: { [string]: any }
 ): AnimChain
 	if typeof(object) == "table" then
@@ -694,14 +721,14 @@ end
 	```
 
 	@param objects Instance | { Instance } -- The object or objects to apply the tween to.
-	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param tweenInfo TweenInfo | TweenInfoTable -- The tween information or a table of tween parameters.
 	@param properties { [string]: any } -- A dictionary of properties to tween to.
 	@param alpha number -- The alpha percentage to start from (0-1).
 	@param yield boolean? -- Whether to yield until the tween is complete.
 ]=]
 function AnimNation.tweenFromAlpha(
 	objects: Instance | { Instance },
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	properties: { [string]: any },
 	alpha: number,
 	yield: boolean?
@@ -857,13 +884,13 @@ end
 	```
 
 	@param object Instance | { Instance } -- The object or objects to apply the lerp to.
-	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param tweenInfo TweenInfo | TweenInfoTable -- The tween information or a table of tween parameters.
 	@param properties { [string]: any } -- A dictionary of properties to lerp to.
 	@param alpha number -- The alpha percentage to lerp to (0-1).
 ]=]
 function AnimNation.lerp(
 	object: Instance | { Instance },
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	properties: { [string]: any },
 	alpha: number
 )
@@ -1184,7 +1211,7 @@ end
 	```
 
 	@param object Instance -- The object to perform the slerp tween on.
-	@param tweenInfo TweenInfo | { [string]: any } -- A TweenInfo or table describing the tween parameters.
+	@param tweenInfo TweenInfo | TweenInfoTable -- A TweenInfo or table describing the tween parameters.
 	@param splineInfo Spline | { CFrame } -- A Spline object or table of CFrame control points.
 	@param alignment ("Track" | "Nodes")? -- Optional; whether to align to the track or nodes. Defaults to "Nodes".
 	@param alpha number? -- Optional; the starting alpha percentage (0-1). Defaults to 0.
@@ -1192,7 +1219,7 @@ end
 ]=]
 function AnimNation.slerpTweenFromAlpha(
 	object: Instance,
-	tweenInfo: TweenInfo | { [string]: any },
+	tweenInfo: TweenInfo | TweenInfoTable,
 	splineInfo: Spline | { CFrame },
 	alignment: ("Track" | "Nodes")?,
 	alpha: number?,
