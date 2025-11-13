@@ -1,47 +1,5 @@
 --[[ File Info
-    Author(s): ChiefWildin, EgoMoose
-
-    A quaternion class implementation for Roblox. Based on EgoMoose's version
-    (https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)
-    provided under the open-source MIT license, then modified by ChiefWildin.
-]]
-
---[[ Properties
-
-        W: number
-            The scalar part of the quaternion
-        Vector: Vector3
-            The vector part of the quaternion
-]]
-
---[[ Functions
-
-	.new(w: number, v: Vector3) -> Quaternion
-		Returns a new Quaternion object from the provided scalar and vector
-		values
-
-	.fromCFrame(cframe: CFrame) -> Quaternion
-		Returns a new Quaternion object from the provided CFrame
-
-	.fromOrientation(orientation: Vector3) -> Quaternion
-		Returns a new Quaternion object from the provided Orientation (in
-		degrees)
-
-	:Inverse() -> Quaternion
-		Returns the inverse of the quaternion
-
-	:AxisAngle() -> (Vector3, number)
-		Returns the axis and angle of the quaternion
-
-	:Slerp(target: Quaternion, alpha: number) -> Quaternion
-		Returns a quaternion interpolated by the alpha value between this one
-		and the target
-
-	:ToCFrame() -> CFrame
-		Returns the CFrame representation of the quaternion
-
-	:ToOrientation() -> Vector3
-		Returns the Orientation (in degrees) representation of the quaternion
+	Author(s): ChiefWildin, EgoMoose
 ]]
 
 -- Types
@@ -65,9 +23,22 @@ export type Quaternion = {
 
 -- Constructors
 
+--[=[
+	@class Quaternion
+
+	A quaternion class implementation for Roblox. Based on EgoMoose's version
+	(https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)
+	provided under the open-source MIT license.
+]=]
 local Quaternion: Quaternion = { ClassName = "Quaternion" } :: Quaternion
 
--- Constructs a new Quaternion object from a given scalar value and vector
+--[=[
+	Constructs a new Quaternion object from a given scalar value and vector
+
+	@param w number -- The scalar part of the quaternion
+	@param v Vector3 -- The vector part of the quaternion
+	@return Quaternion -- The constructed Quaternion object
+]=]
 function Quaternion.new(w: number, v: Vector3): Quaternion
 	local self = setmetatable({}, {
 		__index = Quaternion,
@@ -96,9 +67,14 @@ function Quaternion.new(w: number, v: Vector3): Quaternion
 	return self
 end
 
--- Constructs a new Quaternion object from a CFrame
--- Originally sourced from the wiki (source no longer available):
--- http://wiki.roblox.com/index.php?title=Quaternions_for_rotation#Quaternion_from_a_Rotation_Matrix
+--[=[
+	Constructs a new Quaternion object from a given CFrame
+	Originally sourced from the wiki (source no longer available):
+	http://wiki.roblox.com/index.php?title=Quaternions_for_rotation#Quaternion_from_a_Rotation_Matrix
+
+	@param cframe CFrame -- The CFrame to convert to a Quaternion
+	@return Quaternion -- The constructed Quaternion object
+]=]
 function Quaternion.fromCFrame(cframe: CFrame): Quaternion
 	local _, _, _, m00, m01, m02, m10, m11, m12, m20, m21, m22 = cframe:GetComponents()
 	local trace = m00 + m11 + m22
@@ -125,7 +101,12 @@ function Quaternion.fromCFrame(cframe: CFrame): Quaternion
 	end
 end
 
--- Constructs a new Quaternion object from an Orientation (in degrees)
+--[=[
+	Constructs a new Quaternion object from a given Orientation (in degrees)
+
+	@param orientation Vector3 -- The Orientation (in degrees) to convert to a Quaternion
+	@return Quaternion -- The constructed Quaternion object
+]=]
 function Quaternion.fromOrientation(orientation: Vector3): Quaternion
 	-- Convert to radians
 	orientation *= math.pi / 180
@@ -139,7 +120,9 @@ end
 
 -- Public Functions
 
--- Returns the inverse of the quaternion
+--[=[
+	@return Quaternion -- The inverse of the quaternion
+]=]
 function Quaternion:Inverse(): Quaternion
 	local conjugate = self.W ^ 2 + self.Vector.Magnitude ^ 2
 
@@ -149,7 +132,9 @@ function Quaternion:Inverse(): Quaternion
 	return Quaternion.new(invertedW, invertedVector)
 end
 
--- Returns the axis and angle of the quaternion
+--[=[
+	@return (Vector3, number) -- The axis and angle of the quaternion
+]=]
 function Quaternion:AxisAngle(): (Vector3, number)
 	local axis = self.Vector.Unit
 	local angle = math.acos(self.W) * 2
@@ -161,13 +146,21 @@ function Quaternion:AxisAngle(): (Vector3, number)
 	return axis, angle
 end
 
--- Returns a quaternion spherically interpolated between the quaternion and a
--- target quaternion by an alpha value
+--[=[
+	Returns a quaternion interpolated by the alpha value between this one and
+	the target
+
+	@param target Quaternion -- The target quaternion to interpolate towards
+	@param alpha number -- The alpha value to interpolate by (0-1)
+	@return Quaternion -- The interpolated quaternion
+]=]
 function Quaternion:Slerp(target: Quaternion, alpha: number): Quaternion
 	return ((target * self:Inverse()) ^ alpha) * self
 end
 
--- Returns the CFrame representation of the quaternion
+--[=[
+	@return CFrame -- The CFrame representation of the quaternion
+]=]
 function Quaternion:ToCFrame(): CFrame
 	local result = CFrame.fromAxisAngle(self:AxisAngle())
 
@@ -178,7 +171,9 @@ function Quaternion:ToCFrame(): CFrame
 	return result.Rotation
 end
 
--- Returns the Orientation (in degrees) representation of the quaternion
+--[=[
+	@return Vector3 -- The Orientation (in degrees) representation of the quaternion
+]=]
 function Quaternion:ToOrientation(): Vector3
 	-- Get CFrame, convert to orientation order, convert to degrees
 	return Vector3.new(self:ToCFrame():ToOrientation()) * (180 / math.pi)

@@ -1,9 +1,6 @@
 --[[ File Info
 	Author(s): ChiefWildin
-	Version: 1.11.2
-
-	An animation library that enables quick one-shot style animations for most
-	instances and properties.
+	Version: 1.11.2-theblock
 ]]
 
 --[[ Types
@@ -38,106 +35,6 @@
 		DelayTime = DelayTime | Delay | dt
 ]]
 
---[[ Tweens
-
-	AnimNation tweens support all properties that are supported by TweenService,
-	as well as tweening Models by CFrame/Scale and tweening
-	NumberSequence/ColorSequence values	(given that the target sequence has the
-	same number of keypoints).
-
-	.tween(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, waitToKill: boolean?): AnimChain
-		Asynchronously performs a tween on the given object. Tween parameters
-	    are identical to TweenService:Create(). The waitToKill parameter is
-		included for backwards compatibility, however it is highly recommended
-		to use :Await() instead to yield until the animation has completed.
-		Returns an AnimChain.
-
-	.tweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number, waitToKill: boolean?)
-		Asynchronously performs a tween on the given object, starting from the
-		specified alpha percentage. Otherwise identical to AnimNation.tween.
-		Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim
-		and any other type that supports scalar	multiplication/addition.
-			NOTE: Currently supports tweening Models by CFrame, but does not yet
-			support tweening NumberSequence/ColorSequence values. Using
-			.getTweenFromInstance() will also not return a Tween if using this
-			function. This is due to the backend being a custom solution since
-			Roblox doesn't natively support skipping around	in Tween objects :)
-
-	.lerp(object: Instance, tweenInfo: TweenInfo | {}, properties: {[string]: any}, alpha: number)
-		Instantly set the given object's properties to a lerped value between
-		its current state and the given properties. Functions like
-		`.tweenFromAlpha()`, except that it doesn't continue to play the tween.
-		Naturally, the time value used in the provided TweenInfo or table has no
-		effect on this function.
-
-	.getTweenFromInstance(object: Instance): Tween?
-		Returns the last tween played on the given object, or nil if none exists
-]]
-
---[[ Springs
-
-	AnimNation springs support the following types: number, Vector2, Vector3,
-	UDim, UDim2, CFrame, and Color3. These are natively supported by the
-	provided Spring class as well.
-
-	.impulse(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?): AnimChain
-		Asynchronously performs a spring impulse on the given object. The
-		waitToKill parameter is included for backwards compatibility, however it
-		is highly recommended to use :Await() instead to yield until the
-		animation has completed. Returns an AnimChain.
-
-	.target(object: Instance, springInfo: SpringInfo, properties: {[string]: any}, waitToKill: boolean?): AnimChain
-		Asynchronously uses a spring to transition the given object's
-		properties to the specified values. The waitToKill parameter is included
-		for backwards compatibility, however it is highly recommended to use
-		:Await() instead to yield until the animation has completed. Returns an
-		AnimChain.
-
-	.bind(springs: {Spring}, label: string, callback: (positions: {Springable}, velocities: {Springable}) -> ())
-	    Binds a callback function to the given springs' positions and
-	    velocities.	Can be used to create more complex and constant	interactions
-		with spring values than just a quick impulse or target.
-
-	.unbind(spring: Spring, label: string)
-		Unbinds the callback associated with the specified label from updates.
-
-	.createSpring(springInfo: SpringInfo, name: string?): Spring
-		Creates a new spring with the given properties and maps it to the
-		specified name, if provided. An initial value can be provided in the
-		SpringInfo table. Aliases: .register()
-
-	.getSpring(name: string): Spring?
-		Returns the spring with the given name. If none exists, it will return
-		nil with a warning, or an error depending on the set ERROR_POLICY.
-		Aliases: .inquire()
-]]
-
---[[ Splines
-
-	AnimNation splines are used in animation for interpolating between a series
-	of points in a smoothed curving fashion. They currently only support CFrame
-	types and do not yet return AnimChains.
-
-	.getSpline(name: string): Spline?
-	    Returns the spline with the given name. If none exists, it will return
-	    nil with a warning, or an error depending on the set ERROR_POLICY.
-
-	.createSpline(controlPoints: {CFrame}, name: string?): Spline
-		Creates a new spline from the given control points. This should be a
-		table of CFrame values with at least 4 entries.
-
-	.slerpTweenFromAlpha(object: Instance, tweenInfo: TweenInfo | {}, spline: Spline | {CFrame}, alignment: ("Track" | "Nodes")?, alpha: number?, waitToKill: boolean?)
-	    Asynchronously performs tween-based spherical interpolation on the given
-		object, starting from the specified `alpha` percentage. Parameters are
-		similar to `AnimNation.tweenFromAlpha()`, with the addition of alignment
-		which determines whether the object being tweened is aligned to the
-		track orientation or the nodes' orientations. A spline argument is also
-		required, which can be supplied as previously constructed Spline object
-		or an array of points to create a new one from. Currently supports
-		number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and any other type
-		that supports scalar multiplication/addition.
-]]
-
 -- Services
 
 local RunService = game:GetService("RunService")
@@ -145,6 +42,31 @@ local TweenService = game:GetService("TweenService")
 
 -- Module Declaration
 
+--[=[
+	@class AnimNation
+
+	An animation library that enables quick one-shot style animations for most
+	instances and properties.
+
+	# Tweens
+
+	AnimNation tweens support all properties that are supported by TweenService,
+	as well as tweening Models by CFrame/Scale and tweening
+	NumberSequence/ColorSequence values	(given that the target sequence has the
+	same number of keypoints).
+
+	# Springs
+
+	AnimNation springs support the following types: number, Vector2, Vector3,
+	UDim, UDim2, CFrame, and Color3. These are natively supported by the
+	provided Spring class as well.
+
+	# Splines
+
+	AnimNation splines are used in animation for interpolating between a series
+	of points in a smoothed curving fashion. They currently only support CFrame
+	types and do not yet return AnimChains.
+]=]
 local AnimNation = {}
 
 -- Dependencies
@@ -192,6 +114,19 @@ type Springable = Spring.Springable
 export type Spring = Spring.Spring
 export type Spline = Spline.Spline
 
+--[=[
+	@interface SpringInfo
+	@within AnimNation
+	@field Position Springable?
+	@field Velocity number?
+	@field Target Springable?
+	@field Damper number?
+	@field Speed number?
+	@field Initial Springable?
+	@field Clock (() -> number)?
+
+	A table used to set up parameters for a Spring.
+]=]
 export type SpringInfo = {
 	Position: Springable?,
 	Velocity: number?,
@@ -202,6 +137,18 @@ export type SpringInfo = {
 	Clock: (() -> number)?,
 }
 
+--[=[
+	@interface AnimChain
+	@within AnimNation
+
+	An object that can be used to link functionality to the end of an
+	animation. :AndThen() can be used to link a callback, and :Await() can
+	be used to wait for the animation to complete. These links are processed
+	in the order they are called in.
+
+	@field AndThen (AnimChain, callback: () -> ()) -> AnimChain
+	@field Await (AnimChain) -> AnimChain
+]=]
 export type AnimChain = {
 	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
 	Await: (AnimChain) -> AnimChain,
@@ -334,7 +281,7 @@ local BindLoopConnection
 
 -- Private Functions
 
-local function murderTweenWhenDone(tween: Tween)
+local function scheduleTweenCleanup(tween: Tween)
 	if tween.TweenInfo.Time >= 1e-7 then
 		tween.Completed:Wait()
 	end
@@ -648,31 +595,37 @@ end
 
 -- Public Functions
 
--- Asynchronously performs a tween on the given object.
---
--- Parameters are identical to `TweenService:Create()`. The `waitToKill`
--- parameter is included for backwards compatibility, however it is highly
--- recommended to use `:Await()` instead to yield until the animation has
--- completed.
+--[=[
+	Asynchronously performs a tween on the given object. Tween parameters are
+	identical to `TweenService:Create()`.
+
+	```lua
+	AnimNation.tween(part, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = Vector3.new(10, 20, 30),
+		Rotation = Vector3.new(45, 90, 0),
+	}):Await()
+	```
+
+	@param object Instance | { Instance } -- The object or objects to apply the tween to.
+	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param properties { [string]: any } -- A dictionary of properties to tween to.
+	@return AnimChain -- An AnimChain representing the tween.
+]=]
 function AnimNation.tween(
 	object: Instance | { Instance },
 	tweenInfo: TweenInfo | { [string]: any },
-	properties: { [string]: any },
-	waitToKill: boolean?
+	properties: { [string]: any }
 ): AnimChain
 	if typeof(object) == "table" then
 		local lastChain
 		for _, obj in object do
-			lastChain = AnimNation.tween(obj, tweenInfo, properties, waitToKill)
+			lastChain = AnimNation.tween(obj, tweenInfo, properties)
 		end
 		return lastChain
 	end
 
 	if not object then
 		error("Tween failure - invalid object passed")
-		if waitToKill then
-			task.wait(tweenInfo.Time)
-		end
 		return AnimChain.new()
 	end
 
@@ -711,9 +664,6 @@ function AnimNation.tween(
 	end
 
 	if normalCount == 0 then
-		if waitToKill then
-			task.wait(tweenInfo.Time)
-		end
 		return alternativeAnimChain or AnimChain.new()
 	end
 
@@ -727,23 +677,28 @@ function AnimNation.tween(
 		CustomTweens[object] = nil
 	end
 
-	if waitToKill then
-		murderTweenWhenDone(thisTween)
-	else
-		task.spawn(murderTweenWhenDone, thisTween)
-	end
+	task.spawn(scheduleTweenCleanup, thisTween)
 
 	return tweenChain :: AnimChain
 end
 
--- Asynchronously performs a tween on the given object, starting from the
--- specified `alpha` percentage.
---
--- Parameters are identical to `TweenService:Create()`, with the addition of
--- `waitToKill` which will make the operation synchronous if true.
---
--- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
--- any other type that supports scalar multiplication/addition.
+--[=[
+	Asynchronously performs a tween on the given object, starting from the
+	specified alpha percentage. Otherwise identical to `AnimNation.tween`.
+
+	```lua
+	AnimNation.tweenFromAlpha(part, TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = Vector3.new(10, 20, 30),
+		Rotation = Vector3.new(45, 90, 0),
+	}, 0.5)
+	```
+
+	@param objects Instance | { Instance } -- The object or objects to apply the tween to.
+	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param properties { [string]: any } -- A dictionary of properties to tween to.
+	@param alpha number -- The alpha percentage to start from (0-1).
+	@param yield boolean? -- Whether to yield until the tween is complete.
+]=]
 function AnimNation.tweenFromAlpha(
 	objects: Instance | { Instance },
 	tweenInfo: TweenInfo | { [string]: any },
@@ -875,18 +830,37 @@ function AnimNation.tweenFromAlpha(
 	end
 end
 
--- Returns the last tween played on the given object, or `nil` if none exists.
+--[=[
+	Returns the last tween played on the given object, or nil if none exists.
+
+	@param object Instance -- The object to get the tween from.
+	@return Tween? -- The last tween played on the object.
+]=]
 function AnimNation.getTweenFromInstance(object: Instance): Tween?
 	return TweenDirectory[object]
 end
 
--- Instantly set the given object's properties to a lerped value between it's
--- current state and the given properties. Functions like `.tweenFromAlpha()`,
--- except that it doesn't continue to play the tween. Naturally, the time value
--- used in the provided TweenInfo or table has no effect on this function.
---
--- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
--- any other type that supports scalar multiplication/addition.
+--[=[
+	Instantly set the given object's properties to a lerped value between its
+	current state and the given properties. Functions like `.tweenFromAlpha()`,
+	except that it doesn't continue to play the tween. Naturally, the time value
+	used in the provided TweenInfo or table has no effect on this function.
+
+	Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
+	any other type that supports scalar	multiplication/addition.
+
+	```lua
+	AnimNation.lerp(part, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = Vector3.new(10, 20, 30),
+		Rotation = Vector3.new(45, 90, 0),
+	}, 0.5)
+	```
+
+	@param object Instance | { Instance } -- The object or objects to apply the lerp to.
+	@param tweenInfo TweenInfo | { [string]: any } -- The tween information or a table of tween parameters.
+	@param properties { [string]: any } -- A dictionary of properties to lerp to.
+	@param alpha number -- The alpha percentage to lerp to (0-1).
+]=]
 function AnimNation.lerp(
 	object: Instance | { Instance },
 	tweenInfo: TweenInfo | { [string]: any },
@@ -928,22 +902,30 @@ function AnimNation.lerp(
 	AnimNation.tween(object, TweenInfo.new(0), lerpedValues):Await()
 end
 
--- Asynchronously performs a spring impulse on the given object.
---
--- `SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
--- `waitToKill` parameter is included for backwards compatibility, however it is
--- highly recommended to use `:Await()` instead to yield until the animation has
--- completed.
+--[=[
+	Asynchronously performs a spring impulse on the given object.
+
+	```lua
+	AnimNation.impulse(part, { s = 15, d = 0.7 }, {
+		Position = Vector3.new(10, 20, 30),
+		Rotation = Vector3.new(45, 90, 0),
+	}):Await()
+	```
+
+	@param object Instance | { Instance } -- The object or objects to apply the impulse to.
+	@param springInfo SpringInfo -- A table of spring properties such as `{s = 10, d = 0.5}`.
+	@param properties { [string]: any } -- A dictionary of properties to apply impulses to.
+	@return AnimChain -- An AnimChain representing the spring animations.
+]=]
 function AnimNation.impulse(
 	object: Instance | { Instance },
 	springInfo: SpringInfo,
-	properties: { [string]: any },
-	waitToKill: boolean?
+	properties: { [string]: any }
 ): AnimChain
 	if typeof(object) == "table" then
 		local lastChain
 		for _, obj in object do
-			lastChain = AnimNation.impulse(obj, springInfo, properties, waitToKill)
+			lastChain = AnimNation.impulse(obj, springInfo, properties)
 		end
 		return lastChain
 	end
@@ -954,7 +936,6 @@ function AnimNation.impulse(
 	end
 
 	local animChain: AnimChain
-	local impulsesWorking = 0
 	local isPVInstance = object:IsA("PVInstance")
 	local isModel = object:IsA("Model")
 
@@ -996,50 +977,45 @@ function AnimNation.impulse(
 			newSpring:Impulse(impulse)
 
 			if needsAnimationLink then
-				if waitToKill and animChain then
-					impulsesWorking += 1
-					task.spawn(function()
-						animate(newSpring, object, property)
-						impulsesWorking -= 1
-					end)
-				else
-					task.spawn(animate, newSpring, object, property)
-				end
+				task.spawn(animate, newSpring, object, property)
 			end
 		else
 			error(string.format("Spring failure - invalid impulse type '%s' for property '%s'", impulseType, property))
 		end
 	end
 
-	while impulsesWorking > 0 do
-		task.wait()
-	end
-
 	return animChain :: AnimChain
 end
 
--- Asynchronously uses a spring to transition the given object's properties to
--- the specified values.
---
--- `SpringInfo` is a table of spring properties such as `{s = 10, d = 0.5}`. The
--- `waitToKill` parameter is included for backwards compatibility, however it is
--- highly recommended to use `:Await()` instead to yield until the animation has
--- completed.
+--[=[
+	Asynchronously uses a spring to transition the given object's properties to
+	the specified values.
+
+	```lua
+	AnimNation.target(part, { s = 15, d = 0.7 }, {
+		Position = Vector3.new(10, 20, 30),
+		Rotation = Vector3.new(45, 90, 0),
+	}):Await()
+	```
+
+	@param object Instance | { Instance } -- The object or objects to apply the target to.
+	@param springInfo SpringInfo -- A table of spring properties such as `{s = 10, d = 0.5}`.
+	@param properties { [string]: any } -- A dictionary of properties to target.
+	@return AnimChain -- An AnimChain representing the spring animations.
+]=]
 function AnimNation.target(
 	object: Instance | { Instance },
 	springInfo: SpringInfo,
-	properties: { [string]: any },
-	waitToKill: boolean?
+	properties: { [string]: any }
 ): AnimChain
 	if typeof(object) == "table" then
 		local lastChain
 		for _, obj in object do
-			lastChain = AnimNation.target(obj, springInfo, properties, waitToKill)
+			lastChain = AnimNation.target(obj, springInfo, properties)
 		end
 		return lastChain
 	end
 
-	local springsWorking = 0
 	local animChain = AnimChain.new()
 
 	--TODO: Add sequence support
@@ -1051,29 +1027,33 @@ function AnimNation.target(
 		end
 
 		springInfo.Target = target
-		springsWorking += 1
 
-		local animator = AnimNation.impulse(object, springInfo, { [property] = targetZero }):AndThen(function()
-			springsWorking -= 1
-		end)._animators[1]
+		local animator = AnimNation.impulse(object, springInfo, { [property] = targetZero })._animators[1]
 
 		animChain:_addAnimator(animator)
 
 		springInfo.Target = nil
 	end
 
-	if waitToKill then
-		while springsWorking > 0 do
-			task.wait()
-		end
-	end
-
 	return animChain
 end
 
--- Binds a callback function to the given springs' position and velocity. Can be
--- used to create more complex and constant interactions with spring values than
--- just a quick impulse or target.
+--[=[
+	Binds a callback function to the given springs' position and velocity. Can be
+	used to create more complex and constant interactions with spring values
+	than just a quick impulse or target.
+
+	```lua
+	AnimNation.bind({ spring1, spring2 }, "MyBind", function(positions, velocities)
+		print("Spring 1 Position:", positions[1], "Velocity:", velocities[1])
+		print("Spring 2 Position:", positions[2], "Velocity:", velocities[2])
+	end)
+	```
+
+	@param springs { Spring } -- A table of springs to bind to.
+	@param label string -- A unique label to identify this bind.
+	@param callback (positions: { Springable }, velocities: { Springable }) -> () -- The function to call on each update.
+]=]
 function AnimNation.bind(
 	springs: { Spring },
 	label: string,
@@ -1083,14 +1063,24 @@ function AnimNation.bind(
 	springBindLoop()
 end
 
--- Unbinds the callback associated with the specified label from updates.
+--[=[
+	Unbinds the callback associated with the specified label from updates.
+]=]
 function AnimNation.unbind(label: string)
 	SpringBinds[label] = nil
 end
 
--- Creates a new spring with the given properties. `SpringInfo` is a table of
--- spring properties such as `{s = 10, d = 0.5}`. Optionally allows you to
--- provide a name for lookup with `AnimNation.getSpring()`.
+--[=[
+	Creates a new spring with the given properties.
+
+	```lua
+	local mySpring = AnimNation.createSpring({ s = 10, d = 0.5 }, "MySpring")
+	```
+
+	@param springInfo SpringInfo -- A table of spring properties such as `{s = 10, d = 0.5}`.
+	@param name string? -- An optional name for lookup with `AnimNation.getSpring()`.
+	@return Spring -- The newly created spring.
+]=]
 function AnimNation.createSpring(springInfo: SpringInfo, name: string?): Spring
 	local newSpring = createSpringFromInfo(springInfo)
 	if name then
@@ -1100,8 +1090,17 @@ function AnimNation.createSpring(springInfo: SpringInfo, name: string?): Spring
 	return newSpring
 end
 
--- Returns the spring with the given name. If none exists, it will return `nil`
--- with a warning, or an error depending on the set `ERROR_POLICY`.
+--[=[
+	Returns the spring with the given name.If none exists, it will return `nil`
+	with a warning, or an error depending on the set `ERROR_POLICY`.
+
+	```lua
+	local mySpring = AnimNation.getSpring("MySpring")
+	```
+
+	@param name string -- The name of the spring to retrieve.
+	@return Spring -- The spring with the given name.
+]=]
 function AnimNation.getSpring(name: string): Spring
 	if not SpringDirectory[name] then
 		error(string.format("Spring '%s' does not exist", name))
@@ -1110,9 +1109,24 @@ function AnimNation.getSpring(name: string): Spring
 	return SpringDirectory[name]
 end
 
--- Creates a new spline from the given control points. This should be a table of
--- CFrame values with at least 4 entries. Optionally allows you to provide a
--- name for lookup with `AnimNation.getSpline()`.
+--[=[
+	Creates a new spline from the given control points. This should be a table
+	of CFrame values with at least 4 entries. Optionally allows you to provide a
+	name for lookup with `AnimNation.getSpline()`.
+
+	```lua
+	local mySpline = AnimNation.createSpline({
+		CFrame.new(0, 0, 0),
+		CFrame.new(5, 10, 0),
+		CFrame.new(10, 0, 0),
+		CFrame.new(15, 10, 0),
+	}, "MySpline")
+	```
+
+	@param controlPoints { CFrame } -- A table of CFrame control points with at least 4 entries.
+	@param name string? -- An optional name for lookup with `AnimNation.getSpline()`.
+	@return Spline -- The newly created spline.
+]=]
 function AnimNation.createSpline(controlPoints: { CFrame }, name: string?): Spline
 	local newSpline = Spline.new(controlPoints) :: Spline
 	if name then
@@ -1122,8 +1136,17 @@ function AnimNation.createSpline(controlPoints: { CFrame }, name: string?): Spli
 	return newSpline
 end
 
----Returns the spline with the given name. If none exists, it will return `nil`
--- with a warning, or an error depending on the set `ERROR_POLICY`.
+--[=[
+	Returns the spline with the given name. If none exists, it will return `nil`
+	with a warning, or an error depending on the set `ERROR_POLICY`.
+
+	```lua
+	local mySpline = AnimNation.getSpline("MySpline")
+	```
+
+	@param name string -- The name of the spline to retrieve.
+	@return Spline -- The spline with the given name.
+]=]
 function AnimNation.getSpline(name: string): Spline?
 	if not SplineDirectory[name] then
 		error(string.format("Spline '%s' does not exist", name))
@@ -1132,17 +1155,41 @@ function AnimNation.getSpline(name: string): Spline?
 	return SplineDirectory[name]
 end
 
--- Asynchronously performs tween-based spherical interpolation on the given
--- object, starting from the specified `alpha` percentage.
---
--- Parameters are similar to `AnimNation.tweenFromAlpha()`, with the addition of
--- `alignment` which determines whether the object being tweened is aligned to
--- the track orientation or the nodes' orientations. A spline argument is also
--- required, which can be supplied as previously constructed Spline object or an
--- array of points to create a new one from.
---
--- Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
--- any other type that supports scalar multiplication/addition.
+--[=[
+	Asynchronously performs tween-based spherical interpolation on the given
+	object, starting from the specified `alpha` percentage.
+
+	Parameters are similar to `AnimNation.tweenFromAlpha()`, with the addition of
+	`alignment` which determines whether the object being tweened is aligned to
+	the track orientation or the nodes' orientations. A spline argument is also
+	required, which can be supplied as previously constructed Spline object or an
+	array of points to create a new one from.
+
+	Currently supports number, Vector2, Vector3, CFrame, Color3, UDim2, UDim and
+	any other type that supports scalar multiplication/addition.
+
+	```lua
+	AnimNation.slerpTweenFromAlpha(part, {
+		t = 2,
+		s = Enum.EasingStyle.Quad,
+		d = Enum.EasingDirection.Out,
+	}, {
+		CFrame = AnimNation.createSpline({
+			CFrame.new(0, 0, 0),
+			CFrame.new(5, 10, 0),
+			CFrame.new(10, 0, 0),
+			CFrame.new(15, 10, 0),
+		}),
+	}, "Track", 0.25, true)
+	```
+
+	@param object Instance -- The object to perform the slerp tween on.
+	@param tweenInfo TweenInfo | { [string]: any } -- A TweenInfo or table describing the tween parameters.
+	@param splineInfo Spline | { CFrame } -- A Spline object or table of CFrame control points.
+	@param alignment ("Track" | "Nodes")? -- Optional; whether to align to the track or nodes. Defaults to "Nodes".
+	@param alpha number? -- Optional; the starting alpha percentage (0-1). Defaults to 0.
+	@param yield boolean? -- Optional; whether to yield until the tween is complete. Defaults to false.
+]=]
 function AnimNation.slerpTweenFromAlpha(
 	object: Instance,
 	tweenInfo: TweenInfo | { [string]: any },

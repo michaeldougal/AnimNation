@@ -1,11 +1,5 @@
 --[[ File Info
 	Author(s): ChiefWildin, TactBacon, Quenty
-
-	A physical model of a spring for Roblox. Based off of Quenty's open source
-	version
-	(https://github.com/Quenty/NevermoreEngine/blob/main/src/spring/src/Shared/Spring.lua)
-
-	Visualization (by Defaultio): https://www.desmos.com/calculator/hn2i9shxbz
 ]]
 
 --[[ Properties
@@ -55,8 +49,21 @@
 		Returns whether or not the spring is animating, and the current position
 ]]
 
+--[=[
+	@class Spring
+
+	A physical model of a spring for Roblox. Based off of Quenty's open source
+	version
+	(https://github.com/Quenty/NevermoreEngine/blob/main/src/spring/src/Shared/Spring.lua)
+
+	Visualization (by Defaultio): https://www.desmos.com/calculator/hn2i9shxbz
+]=]
 local Spring = {}
 
+--[=[
+	@type Springable Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
+	@within Spring
+]=]
 export type Springable = Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3
 export type Spring = {
 	Position: Springable,
@@ -229,15 +236,19 @@ local function convertToClosestAngle(currentAngle, givenTargetAngle)
 	end
 end
 
---- Impulse the spring with a change in velocity
----@param velocity Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The velocity to impulse with
+--[=[
+	Impulse the spring with a change in velocity
+	@param velocity Springable -- The velocity to impulse with
+]=]
 function Spring:Impulse(velocity: Springable)
 	VelocityConverters[self.Type](self, velocity)
 	self:_updateCallbacks()
 end
 
---- Skips the spring forward by the specified amount of time
----@param delta number The amount of time to skip forward in seconds
+--[=[
+	Skips the spring forward by the specified amount of time
+	@param delta number -- The amount of time to skip forward in seconds
+]=]
 function Spring:TimeSkip(delta: number)
 	local now = self._clock()
 	local position, velocity = self:_positionVelocity(now + delta)
@@ -246,9 +257,14 @@ function Spring:TimeSkip(delta: number)
 	self._time0 = now
 end
 
--- Binds a callback function to the given spring's position and velocity. Can be
--- used to create more complex and constant interactions with spring values than
--- just a quick impulse or target.
+--[=[
+	Binds a callback function to the given spring's position and velocity. Can be
+	used to create more complex and constant interactions with spring values than
+	just a quick impulse or target.
+
+	@param label string -- The label to bind the callback to.
+	@param callback (position: Springable, velocity: Springable) -> () -- The callback function to bind
+]=]
 function Spring:Bind(label: string, callback: (position: Springable, velocity: Springable) -> ())
 	if self._callbacks[label] then
 		warn("Spring already had a bound callback for label '" .. label .. "', overwriting...\n" .. debug.traceback())
@@ -258,7 +274,11 @@ function Spring:Bind(label: string, callback: (position: Springable, velocity: S
 	self:_updateCallbacks()
 end
 
--- Unbinds the given callback label from the spring.
+--[=[
+	Unbinds the given callback label from the spring.
+
+	@param label string -- The label to unbind the callback from.
+]=]
 function Spring:Unbind(label: string)
 	self._callbacks[label] = nil
 
@@ -271,7 +291,12 @@ function Spring:Unbind(label: string)
 	self._isBound = false
 end
 
--- Returns whether or not the spring is animating, and the current position
+--[=[
+	Returns whether or not the spring is animating, and the current position.
+
+	@param epsilon number? -- The epsilon value to use for determining if the spring is animating. Defaults to 0.0001.
+	@return (boolean, Springable) -- Whether or not the spring is animating, and the current position.
+]=]
 function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 	epsilon = epsilon or EPSILON
 
@@ -334,20 +359,28 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 	end
 end
 
--- Will disconnect any potential bindings, if they exist
+--[=[
+	Cleans up any bindings.
+]=]
 function Spring:Destroy()
 	for key in self._callbacks do
 		self:Unbind(key)
 	end
 end
 
+--[=[
+	Alias for :Destroy()
+]=]
 function Spring:Disconnect()
 	self:Destroy()
 end
 
---- Creates a new spring
----@param initial Vector3 | Vector2 | number | UDim2 | UDim | CFrame | Color3 The starting position of the spring
----@param clock number function to use to update spring
+--[=[
+	Creates a new spring.
+
+	@param initial Springable -- The starting position of the spring.
+	@param clock (() -> number)? -- function to use to update spring
+]=]
 function Spring.new(initial: Springable, clock: (() -> number)?): Spring
 	local self = {}
 

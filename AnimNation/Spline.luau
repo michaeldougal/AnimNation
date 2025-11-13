@@ -102,6 +102,11 @@ local Quaternion = require(script.Parent:WaitForChild("Quaternion")) ---@module 
 
 -- Main Module
 
+--[=[
+	@class Spline
+
+	A spline curve class for Roblox.
+]=]
 local Spline: Spline = {} :: Spline
 
 Spline.__index = function(this, key)
@@ -265,10 +270,14 @@ end
 
 -- Public Functions
 
----Gets a CFrame along the spline at a given alpha value using the natural Catmull-Rom spline algorithm.
----@param alpha number The alpha value to get the point at. This should be a value between 0 and 1.
----@param alignment string? This will orient the rotation of the result to either follow the rotation of the path (`"Track"`) or the rotation of the nodes (`"Nodes"`)
----@return CFrame point The CFrame along the curve at the given alpha value using the segments for distances.
+--[=[
+	Gets a CFrame along the spline at a given alpha value using the natural
+	Catmull-Rom spline algorithm.
+
+	@param alpha number -- The alpha value to get the point at. This should be a value between 0 and 1.
+	@param alignment ("Track" | "Nodes")? -- This will orient the rotation of the result to either follow the rotation of the path (`"Track"`) or the rotation of the nodes (`"Nodes"`)
+	@return CFrame -- The CFrame along the curve at the given alpha value using the segments for distances.
+]=]
 function Spline:GetCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")?): CFrame
 	alignment = alignment or "Track"
 
@@ -308,11 +317,15 @@ function Spline:GetCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")
 	end
 end
 
----Gets a CFrame along the spline using a close approximation to where the point would be linearly to
----a given alpha value using the Catmull-Rom spline algorithm.
----@param alpha number The alpha value to get the point at. This should be a value between 0 and 1.
----@param alignment string? This will orient the rotation of the result to either follow the rotation of the path (`"Track"`) or the rotation of the nodes (`"Nodes"`)
----@return CFrame point The CFrame along the curve at the given alpha value using the segments for distances.
+--[=[
+	Gets a CFrame along the spline using a close approximation to where the
+	point would be linearly to a given alpha value using the Catmull-Rom spline
+	algorithm.
+
+	@param alpha number -- The alpha value to get the point at. This should be a value between 0 and 1.
+	@param alignment ("Track" | "Nodes")? -- This will orient the rotation of the result to either follow the rotation of the path (`"Track"`) or the rotation of the nodes (`"Nodes"`)
+	@return CFrame -- The CFrame along the curve at the given alpha value using the segments for distances.
+]=]
 function Spline:GetLinearCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")?): CFrame
 	alignment = alignment or "Track"
 
@@ -363,7 +376,9 @@ function Spline:GetLinearCFrameFromAlpha(alpha: number, alignment: ("Track" | "N
 	end
 end
 
----Destroys the spline and cleans up any listeners.
+--[=[
+	Destroys the spline curve and cleans up any listeners.
+]=]
 function Spline:Destroy()
 	self._destroying:Fire()
 	self._destroying:Destroy()
@@ -378,9 +393,13 @@ end
 
 -- Constructor
 
----Constructor for the Spline class. Takes in a curve model and returns a new Spline object.
----@param controlPoints table A table of CFrame objects that will be used as control points for the spline.
----@return table Spline The new Spline object.
+--[=[
+	Constructor for the Spline class. Takes in a curve model and returns a new
+	Spline object.
+
+	@param controlPoints { CFrame } -- The control points for the spline.
+	@return Spline -- The new Spline object.
+]=]
 function Spline.new(controlPoints: { CFrame }): Spline
 	local self = setmetatable({}, Spline)
 

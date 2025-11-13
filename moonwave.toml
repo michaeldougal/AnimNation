@@ -1,0 +1,12 @@
+title = "AnimNation"
+
+changelog = true
+
+[docusaurus]
+onBrokenLinks = "warn"
+# url = "https://github.com/michaeldougal/AnimNation"
+baseUrl = "/"
+
+[home]
+enabled = false
+includeReadme = true # Optional
