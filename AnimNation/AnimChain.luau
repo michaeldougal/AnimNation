@@ -135,7 +135,4 @@ function AnimChain.new(animators: { Spring | Tween }?)
 	return self
 end
 
-AnimChain.andThen = AnimChain.AndThen
-AnimChain.await = AnimChain.Await
-
 return AnimChain
