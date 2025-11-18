@@ -2,7 +2,7 @@
 <img src="https://user-images.githubusercontent.com/67706277/205463774-5c513218-9ca9-4b36-8d1d-1c1ac75f4c5a.png" />
 
 A streamlined Roblox animation utility that simplifies the use of springs,
-tweens, and splines on object properties. See the API section for usage and
+tweens, and splines on object properties. See <a href="/AnimNation/api/">the API section</a> for usage and
 technical details.
 </div>
 
