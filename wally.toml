@@ -31,8 +31,8 @@ registry = "https://github.com/upliftgames/wally-index"
 
 # Wally will display this link on the package's page on wally.run.
 # A value should only be set if there is a dedicated website for
-# the package other than the source repository. 
-# homepage = ""
+# the package other than the source repository.
+homepage = "https://michaeldougal.github.io/AnimNation/"
 
 # Wally will display this link on package's page on wally.run.
 # The repository field should be a URL to the source repository for a package.
