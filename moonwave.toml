@@ -4,12 +4,21 @@ staticDirectories = ['static']
 [docusaurus]
 onBrokenLinks = "warn"
 # url = "https://github.com/michaeldougal/AnimNation"
-baseUrl = "/"
+baseUrl = "/AnimNation/"
 favicon = "/img/favicon.ico"
+
+[colorMode]
+defaultMode = "dark"
+disableSwitch = true
+respectPrefersColorScheme = false
 
 [home]
 enabled = false
 includeReadme = true # Optional
+
+[footer]
+style = "dark"
+copyright = "Copyright © 2025 Michael Dougal. Built with Moonwave and Docusaurus"
 
 [navbar]
 title = ""
