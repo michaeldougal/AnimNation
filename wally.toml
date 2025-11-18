@@ -42,7 +42,7 @@ repository = "https://github.com/michaeldougal/AnimNation"
 # By default gitignore files are respected and Wally won't include hidden
 # files/directories or packages downloaded by Wally.
 # include = []
-# exclude = []
+exclude = [".moonwave", "moonwave.toml"]
 
 # Packages can be marked as private to prevent them from being published.
 private = false
