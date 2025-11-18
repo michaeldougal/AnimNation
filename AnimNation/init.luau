@@ -1,6 +1,6 @@
 --[[ File Info
 	Author(s): ChiefWildin
-	Version: 1.12.0
+	Version: 1.12.1
 ]]
 
 -- Services
@@ -39,6 +39,7 @@ local AnimNation = {}
 
 -- Dependencies
 
+local AnimChain = require(script:WaitForChild("AnimChain")) ---@module AnimChain
 local Spring = require(script:WaitForChild("Spring")) ---@module Spring
 local Spline = require(script:WaitForChild("Spline")) ---@module Spline
 
@@ -79,6 +80,7 @@ end
 -- Classes and Types
 
 type Springable = Spring.Springable
+export type AnimChain = AnimChain.AnimChain
 export type Spring = Spring.Spring
 export type Spline = Spline.Spline
 
@@ -109,37 +111,25 @@ export type Spline = Spline.Spline
 ]=]
 export type SpringInfo = {
 	Position: Springable?,
+	Value: Springable?,
+	p: Springable?,
+
 	Velocity: number?,
+	v: number?,
+
 	Target: Springable?,
+	t: Springable?,
+
 	Damper: number?,
+	d: number?,
+
 	Speed: number?,
+	s: number?,
+
 	Initial: Springable?,
+	i: Springable?,
+
 	Clock: (() -> number)?,
-}
-
---[=[
-	@interface AnimChain
-	@within AnimNation
-
-	An object that can be used to link functionality to the end of an
-	animation. :AndThen() can be used to link a callback, and :Await() can
-	be used to wait for the animation to complete. These links are processed
-	in the order they are called in.
-
-	@field AndThen (AnimChain, callback: () -> ()) -> AnimChain
-	@field Await (AnimChain) -> AnimChain
-]=]
-export type AnimChain = {
-	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
-	Await: (AnimChain) -> AnimChain,
-
-	new: (animators: { Spring | Tween }?) -> AnimChain,
-
-	_addAnimator: (AnimChain, animator: Spring | Tween) -> (),
-	_processCallbackQueue: (AnimChain) -> (),
-	_waitForAnimationsCompleted: (AnimChain) -> (),
-
-	__index: AnimChain,
 }
 
 --[=[
@@ -187,87 +177,9 @@ export type TweenInfoTable = {
 	DelayTime: number?,
 	Delay: number?,
 	dt: number?,
+
+	_skipControlReset: boolean?,
 }
-
-local AnimChain: AnimChain = {} :: AnimChain
-AnimChain.__index = AnimChain
-
-function AnimChain.new(animators: { Spring | Tween }?)
-	local self = setmetatable({}, AnimChain)
-
-	self._animators = animators or {}
-	self._callbackQueue = {}
-	self._processingQueue = false
-
-	return self
-end
-
-function AnimChain:_addAnimator(animator: Spring | Tween)
-	table.insert(self._animators, animator)
-end
-
-function AnimChain:_processCallbackQueue()
-	if not self._processingQueue then
-		self._processingQueue = true
-
-		while self._callbackQueue[1] do
-			table.remove(self._callbackQueue, 1)()
-		end
-
-		self._processingQueue = false
-	end
-end
-
-function AnimChain:_waitForAnimationsCompleted()
-	for _, animator: Spring | Tween in ipairs(self._animators) do
-		if typeof(animator) == "table" then -- Spring
-			while animator:IsAnimating(0.01) do
-				task.wait()
-			end
-		elseif typeof(animator) == "Instance" then -- Tween
-			while
-				animator.PlaybackState ~= Enum.PlaybackState.Completed
-				and animator.PlaybackState ~= Enum.PlaybackState.Cancelled
-			do
-				animator:GetPropertyChangedSignal("PlaybackState"):Wait()
-			end
-		end
-	end
-end
-
-function AnimChain:AndThen(callback: () -> ()): AnimChain
-	task.spawn(function()
-		table.insert(self._callbackQueue, callback)
-
-		self:_waitForAnimationsCompleted()
-
-		self:_processCallbackQueue()
-	end)
-
-	return self :: AnimChain
-end
-
-function AnimChain:Await(): AnimChain
-	local locked = true
-	local unlock = function()
-		locked = false
-	end
-
-	table.insert(self._callbackQueue, unlock)
-
-	self:_waitForAnimationsCompleted()
-
-	task.spawn(self._processCallbackQueue, self)
-
-	while locked do
-		task.wait()
-	end
-
-	return self :: AnimChain
-end
-
-AnimChain.andThen = AnimChain.AndThen
-AnimChain.await = AnimChain.Await
 
 -- Global Variables
 
@@ -324,14 +236,10 @@ end
 local function tweenByPivot(
 	object: Model,
 	tweenInfo: TweenInfo | TweenInfoTable,
-	properties: {},
-	waitToKill: boolean?
+	properties: { CFrame: CFrame }
 ): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by pivot failure - invalid object passed")
-		if waitToKill then
-			task.wait(tweenInfo.Time)
-		end
 		return AnimChain.new()
 	end
 
@@ -346,20 +254,16 @@ local function tweenByPivot(
 		fakeCenter:Destroy()
 	end)
 
-	return AnimNation.tween(fakeCenter, tweenInfo, properties, waitToKill)
+	return AnimNation.tween(fakeCenter, tweenInfo, properties)
 end
 
 local function tweenByScale(
 	object: Model,
 	tweenInfo: TweenInfo | TweenInfoTable,
-	properties: { [string]: any },
-	waitToKill: boolean?
+	properties: { [string]: any }
 ): AnimChain
 	if not object or not object:IsA("PVInstance") then
 		error("Tween by scale failure - invalid object passed")
-		if waitToKill then
-			task.wait(tweenInfo.Time)
-		end
 		return AnimChain.new()
 	end
 
@@ -377,7 +281,7 @@ local function tweenByScale(
 	properties.Value = properties.Scale
 	properties.Scale = nil
 
-	return AnimNation.tween(scaleRef, tweenInfo, properties, waitToKill)
+	return AnimNation.tween(scaleRef, tweenInfo, properties)
 end
 
 local function animateSequence(

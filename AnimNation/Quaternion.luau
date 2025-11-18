@@ -4,11 +4,16 @@
 
 -- Types
 
-export type Quaternion = {
-	ClassName: "Quaternion",
+export type QuaternionImpl = {
+	-- Metatable members
 
-	W: number,
-	Vector: Vector3,
+	__index: QuaternionImpl,
+	__mul: (x: Quaternion, y: Quaternion) -> Quaternion,
+	__pow: (x: Quaternion, power: number) -> Quaternion,
+
+	-- Public members
+
+	ClassName: "Quaternion",
 
 	new: (w: number, v: Vector3) -> Quaternion,
 	fromCFrame: (cframe: CFrame) -> Quaternion,
@@ -19,8 +24,20 @@ export type Quaternion = {
 	Slerp: (self: Quaternion, target: Quaternion, alpha: number) -> Quaternion,
 	ToCFrame: (self: Quaternion) -> CFrame,
 	ToOrientation: (self: Quaternion) -> Vector3,
-}
 
+	-- Private members
+}
+export type Quaternion = typeof(setmetatable(
+	{} :: {
+		-- Constructed public members
+
+		Vector: Vector3,
+		W: number,
+
+		-- Constructed private members
+	},
+	{} :: QuaternionImpl
+))
 -- Constructors
 
 --[=[
@@ -30,7 +47,7 @@ export type Quaternion = {
 	(https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)
 	provided under the open-source MIT license.
 ]=]
-local Quaternion: Quaternion = { ClassName = "Quaternion" } :: Quaternion
+local Quaternion: QuaternionImpl = { ClassName = "Quaternion" } :: QuaternionImpl
 
 --[=[
 	Constructs a new Quaternion object from a given scalar value and vector
@@ -39,7 +56,7 @@ local Quaternion: Quaternion = { ClassName = "Quaternion" } :: Quaternion
 	@param v Vector3 -- The vector part of the quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.new(w: number, v: Vector3): Quaternion
+function Quaternion.new(w: number, v: Vector3)
 	local self = setmetatable({}, {
 		__index = Quaternion,
 		__mul = function(x: Quaternion, y: Quaternion)
@@ -50,7 +67,7 @@ function Quaternion.new(w: number, v: Vector3): Quaternion
 				return Quaternion.new(WProduct, VectorProduct)
 			end
 
-			error(`Quaternion multiplication requires a Quaternion as the second operand, given {y}`)
+			error(`Quaternion multiplication requires a Quaternion as the second operand, given {tostring(y)}`)
 		end,
 		__pow = function(x: Quaternion, power: number)
 			local axis, angle = x:AxisAngle()
@@ -75,7 +92,7 @@ end
 	@param cframe CFrame -- The CFrame to convert to a Quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.fromCFrame(cframe: CFrame): Quaternion
+function Quaternion.fromCFrame(cframe: CFrame)
 	local _, _, _, m00, m01, m02, m10, m11, m12, m20, m21, m22 = cframe:GetComponents()
 	local trace = m00 + m11 + m22
 	if trace > 0 then
@@ -107,7 +124,7 @@ end
 	@param orientation Vector3 -- The Orientation (in degrees) to convert to a Quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.fromOrientation(orientation: Vector3): Quaternion
+function Quaternion.fromOrientation(orientation: Vector3)
 	-- Convert to radians
 	orientation *= math.pi / 180
 

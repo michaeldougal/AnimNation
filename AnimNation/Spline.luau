@@ -1,96 +1,56 @@
 --[[ File Info
 	Author(s): TactBacon, ChiefWildin (feat. eliphant)
-
-	A spline curve class for Roblox.
 --]]
-
---[[ Constants
-
-	SEGMENTS_PER_CURVE: number
-		The number of segments per curve. The higher this number, the more
-		accurate the curve will be, but the more expensive it will be to
-		calculate
-]]
-
---[[ Properties
-
-	ControlPoints: {CFrame}
-		A table of CFrames that are used as control points for the spline curve
-
-	Curve: Model
-	    A model containing the parts that make up the spline curve. This is
-	    updated whenever the control points are moved or the Segments property
-	    is updated
-
-	Visible: boolean
-		Whether or not the curve is visible in the workspace, default false
-
-	Parent: Instance?
-		The parent of the curve model (Spline.Curve), default workspace
-
-	Segments: number
-		The number of segments per curve. The higher this number, the more
-		accurate the curve will be, but the more expensive it will be to
-		calculate. Default 10
-]]
-
---[[ Functions
-
-	.new(controlPoints: {CFrame}) -> Spline
-		controlPoints: A table of CFrames that are used as control points for
-			the spline curve
-
-		Returns a new spline curve object
-
-	:GetCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame
-		alpha: A number between 0 and 1 that represents the CFrame along the
-			curve
-		alignment: The alignment of the CFrame. "Track" will align the CFrame to
-			the direction of the curve, and "Nodes" will align the CFrame to the
-			direction of the control points
-
-	    Returns the CFrame along the curve at the given alpha value using the
-		segments for distances
-
-	:GetLinearCFrameFromAlpha(alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame
-		alpha: A number between 0 and 1 that represents the CFrame along the
-			curve
-	    alignment: The alignment of the CFrame. "Track" will align the CFrame to
-			the direction of the curve, and "Nodes" will align the CFrame to the
-			direction of the control points
-
-		Returns the CFrame along the curve at the given alpha value using the
-		distance between the first and last control points for distances
-
-	:Destroy()
-		Destroys the spline curve.
-]]
-
---[[ Events
-
-	Destroying: () -> ()
-		Fires when the spline curve is destroyed.
-]]
 
 -- Types
 
-export type Spline = {
-	ControlPoints: { CFrame },
-	Curve: Model,
-	Visible: boolean,
-	Parent: Instance?,
-
-	Destroy: (self: Spline) -> (),
-	GetCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
-	GetLinearCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
-	new: (controlPoints: { CFrame }) -> Spline,
+export type SplineImpl = {
+	-- Metatable members
 
 	__index: (self: Spline, key: string) -> any,
 	__newindex: (self: Spline, key: string, value: any) -> any,
 
+	-- Public members
+
+	ControlPoints: { CFrame },
+	Curve: Model,
+	Parent: Instance?,
+	Visible: boolean,
+
+	new: (controlPoints: { CFrame }) -> Spline,
+	Destroy: (self: Spline) -> (),
+	GetCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
+	GetLinearCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
+
+	-- Private members
+
 	_drawCurve: (self: Spline) -> (),
 	_update: (self: Spline) -> (),
 }
+export type Spline = typeof(setmetatable(
+	{} :: {
+		-- Constructed public members
+		ControlPoints: { CFrame },
+		Curve: Model,
+		Destroying: RBXScriptSignal,
+		Parent: Instance?,
+		Segments: number,
+		Visible: boolean,
+
+		-- Constructed private members
+		_controlPoints: { CFrame },
+		_curveDrawn: boolean,
+		_curveLength: number,
+		_destroying: BindableEvent,
+		_distancePoints: { number },
+		_listeners: { RBXScriptConnection },
+		_normalizedDistancePoints: { number },
+		_parent: Instance?,
+		_segments: number,
+		_visible: boolean,
+	},
+	{} :: SplineImpl
+))
 
 -- Constants
 
@@ -107,40 +67,75 @@ local Quaternion = require(script.Parent:WaitForChild("Quaternion")) ---@module 
 
 	A spline curve class for Roblox.
 ]=]
-local Spline: Spline = {} :: Spline
+--[=[
+	@prop ControlPoints { CFrame }
+	@within Spline
+	A table of CFrames that are used as control points for the spline curve
+]=]
+--[=[
+	@prop Curve Model
+	@within Spline
+	A model containing the parts that make up the spline curve. This is
+	updated whenever the control points are moved or the Segments property
+	is updated
+]=]
+--[=[
+	@prop Destroying RBXScriptSignal
+	@within Spline
+	Fires when the spline curve is destroyed.
+]=]
+--[=[
+	@prop Parent Instance?
+	@within Spline
+	The parent of the spline curve model. Default workspace.
+]=]
+--[=[
+	@prop Segments number
+	@within Spline
+	The number of segments per curve. The higher this number, the more
+	accurate the curve will be, but the more expensive it will be to
+	calculate. Default 10.
+]=]
+--[=[
+	@prop Visible boolean
+	@within Spline
+	Whether or not the spline curve is visible in the workspace. Default false.
+]=]
 
-Spline.__index = function(this, key)
+local Spline: SplineImpl = {} :: SplineImpl
+
+Spline.__index = function(self, key)
 	if key == "Visible" then
-		return rawget(this, "_visible")
+		return rawget(self, "_visible")
 	elseif key == "Parent" then
-		return rawget(this, "_parent")
+		return rawget(self, "_parent")
 	elseif key == "Segments" then
-		return rawget(this, "_segments")
+		return rawget(self, "_segments")
 	elseif key == "ControlPoints" then
-		return rawget(this, "_controlPoints")
+		return rawget(self, "_controlPoints")
 	else
 		return Spline[key]
 	end
 end
 
-Spline.__newindex = function(this, key, value)
+Spline.__newindex = function(self, key, value)
 	if key == "Visible" then
-		rawset(this, "_visible", value)
-		if value and not this._curveDrawn then
-			this:_drawCurve()
+		rawset(self, "_visible", value)
+		if value and not self._curveDrawn then
+			self:_drawCurve()
 		end
-		this.Curve.Parent = value and this._parent or nil
+		self.Curve.Parent = value and self._parent or nil
 	elseif key == "Parent" then
-		rawset(this, "_parent", value)
-		this.Curve.Parent = this.Visible and this._parent or nil
+		rawset(self, "_parent", value)
+		self.Curve.Parent = self.Visible and self._parent or nil
 	elseif key == "Segments" then
-		rawset(this, "_segments", value)
-		this:_update()
+		rawset(self, "_segments", value)
+		self:_update()
 	elseif key == "ControlPoints" then
-		rawset(this, "_controlPoints", value)
-		this:_update()
+		rawset(self, "_controlPoints", value)
+		self:_update()
 	else
-		rawset(this, key, value)
+		rawset(self, key, value)
 	end
 end
 
@@ -400,7 +395,7 @@ end
 	@param controlPoints { CFrame } -- The control points for the spline.
 	@return Spline -- The new Spline object.
 ]=]
-function Spline.new(controlPoints: { CFrame }): Spline
+function Spline.new(controlPoints: { CFrame })
 	local self = setmetatable({}, Spline)
 
 	self._listeners = {} :: { RBXScriptConnection }
