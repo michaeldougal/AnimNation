@@ -9,7 +9,7 @@ description = "An animation library that enables quick one-shot style animations
 
 # Versions follow Semantic Versioning.
 # https://semver.org/
-version = "1.12.1"
+version = "1.13.0"
 
 # Contains an SPDX License Expression.
 # Licenses are required for publishing code to public registries.
