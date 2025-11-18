@@ -1,12 +1,21 @@
-title = "AnimNation"
-
 changelog = true
+staticDirectories = ['static']
 
 [docusaurus]
 onBrokenLinks = "warn"
 # url = "https://github.com/michaeldougal/AnimNation"
 baseUrl = "/"
+favicon = "/img/favicon.ico"
 
 [home]
 enabled = false
 includeReadme = true # Optional
+
+[navbar]
+title = ""
+
+[navbar.logo]
+alt = 'Logo'
+src = '/img/logo.png'
+href = '/'
+target = '_self'
