@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[174],{4410:s=>{s.exports=JSON.parse('{"sourceUrl":"https://github.com/michaeldougal/AnimNation/blob/master","baseUrl":"/AnimNation/","classOrder":[],"apiCategories":[]}')}}]);
