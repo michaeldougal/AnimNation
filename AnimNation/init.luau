@@ -1,6 +1,6 @@
 --[[ File Info
 	Author(s): ChiefWildin
-	Version: 1.13.0
+	Version: 1.13.1
 ]]
 
 -- Services
@@ -79,6 +79,11 @@ end
 
 -- Classes and Types
 
+type SequencePoint = {
+	Time: NumberValue,
+	Value: NumberValue | Color3Value,
+	Envelope: NumberValue?,
+}
 type Springable = Spring.Springable
 export type AnimChain = AnimChain.AnimChain
 export type Spring = Spring.Spring
@@ -202,8 +207,9 @@ local SpringBinds: { [string]: {} } = {}
 local TweenDirectory: { [Instance]: Tween } = {}
 
 -- A dictionary that keeps track of the states of NumberSequence/ColorSequence
--- values.
-local ActiveSequences: { [Instance]: { [string]: { [number]: NumberValue | Color3Value } } } = {}
+-- values. The first index in the Values array is the current iteration count to
+-- prevent conflicts between multiple animations on the same property.
+local ActiveSequences: { [Instance]: { [string]: { [number]: number | SequencePoint } } } = {}
 
 -- A dictionary that keeps track of any custom tween processes (tweenFromAlpha).
 -- Instances are used as keys to a sub-dictionary that maps properties to the
@@ -286,54 +292,60 @@ end
 
 local function animateSequence(
 	object: Instance,
-	sequenceName: string,
+	property: string,
 	method: "tween" | "target",
 	methodInfo: TweenInfo | SpringInfo,
-	newSequence: NumberSequence | ColorSequence,
-	waitToKill: boolean?
+	newSequence: NumberSequence | ColorSequence
 ): AnimChain
-	local originalSequence = object[sequenceName]
+	local originalSequence = object[property] :: NumberSequence | ColorSequence
 	local sequenceType = typeof(originalSequence)
 	local numPoints = #originalSequence.Keypoints
 	if numPoints ~= #newSequence.Keypoints then
 		error("Animate sequence failure - keypoint count mismatch")
-		if waitToKill and methodInfo.Time then
-			task.wait(methodInfo.Time)
-		end
 		return AnimChain.new()
-	end
-
-	local function updateSequence()
-		if not ActiveSequences[object] or not ActiveSequences[object][sequenceName] then
-			return
-		end
-
-		local newKeypoints = table.create(numPoints)
-		for index, point in pairs(ActiveSequences[object][sequenceName]) do
-			if sequenceType == "NumberSequence" then
-				newKeypoints[index] =
-					NumberSequenceKeypoint.new(point.Time.Value, point.Value.Value, point.Envelope.Value)
-			else
-				newKeypoints[index] = ColorSequenceKeypoint.new(point.Time.Value, point.Value.Value)
-			end
-		end
-		if sequenceType == "NumberSequence" then
-			object[sequenceName] = NumberSequence.new(newKeypoints)
-		else
-			object[sequenceName] = ColorSequence.new(newKeypoints)
-		end
 	end
 
 	if not ActiveSequences[object] then
 		ActiveSequences[object] = {}
 	end
-	if not ActiveSequences[object][sequenceName] then
-		ActiveSequences[object][sequenceName] = table.create(numPoints)
+
+	local thisSequence = ActiveSequences[object][property]
+	local thisIteration = 1
+
+	local function updateSequence()
+		if not ActiveSequences[object] or not thisSequence then
+			return
+		end
+
+		local newKeypoints = table.create(numPoints)
+		for index, point in pairs(thisSequence) do
+			if index == 1 then
+				continue
+			end
+
+			if sequenceType == "NumberSequence" then
+				newKeypoints[index - 1] =
+					NumberSequenceKeypoint.new(point.Time.Value, point.Value.Value, point.Envelope.Value)
+			else
+				newKeypoints[index - 1] = ColorSequenceKeypoint.new(point.Time.Value, point.Value.Value)
+			end
+		end
+		if sequenceType == "NumberSequence" then
+			object[property] = NumberSequence.new(newKeypoints)
+		else
+			object[property] = ColorSequence.new(newKeypoints)
+		end
+	end
+
+	if not thisSequence then
+		thisSequence = table.create(numPoints + 1)
+		thisSequence[1] = thisIteration
+		ActiveSequences[object][property] = thisSequence
 
 		for index, keypoint in pairs(originalSequence.Keypoints) do
 			-- Set up value Instances that we'll use to track and modify each
 			-- keypoint of the sequence
-			local point
+			local point: SequencePoint
 			if sequenceType == "NumberSequence" then
 				point = {
 					Time = Instance.new("NumberValue"),
@@ -356,27 +368,30 @@ local function animateSequence(
 			point.Value:GetPropertyChangedSignal("Value"):Connect(updateSequence)
 			point.Time:GetPropertyChangedSignal("Value"):Connect(updateSequence)
 
-			ActiveSequences[object][sequenceName][index] = point
+			thisSequence[index + 1] = point
 		end
+	else
+		thisSequence[1] += 1
+		thisIteration = thisSequence[1]
 	end
 
 	for index in pairs(originalSequence.Keypoints) do
-		local point = ActiveSequences[object][sequenceName][index]
+		local point: SequencePoint = thisSequence[index + 1]
 		local isLast = index == numPoints
-		local shouldWait = isLast and waitToKill
 		if sequenceType == "NumberSequence" then
 			AnimNation[method](point.Envelope, methodInfo, { Value = newSequence.Keypoints[index].Envelope })
 		end
+
 		AnimNation[method](point.Value, methodInfo, { Value = newSequence.Keypoints[index].Value })
-		local animChain = AnimNation[method](
-			point.Time,
-			methodInfo,
-			{ Value = newSequence.Keypoints[index].Time },
-			shouldWait
-		)
-			:AndThen(function()
+		local animChain = AnimNation[method](point.Time, methodInfo, { Value = newSequence.Keypoints[index].Time })
+
+		if isLast then
+			animChain:AndThen(function()
 				if index == numPoints and ActiveSequences[object] then
-					for _, pointData in pairs(ActiveSequences[object][sequenceName]) do
+					for i, pointData: SequencePoint in pairs(thisSequence) do
+						if i == 1 then
+							continue
+						end
 						pointData.Value:Destroy()
 						pointData.Time:Destroy()
 						if sequenceType == "NumberSequence" then
@@ -384,7 +399,12 @@ local function animateSequence(
 						end
 					end
 
-					ActiveSequences[object][sequenceName] = nil
+					if thisSequence[1] ~= thisIteration then
+						return
+					end
+
+					object[property] = newSequence
+					ActiveSequences[object][property] = nil
 
 					local remainingAnims = 0
 					for _, _ in pairs(ActiveSequences[object]) do
@@ -394,12 +414,9 @@ local function animateSequence(
 					if remainingAnims == 0 then
 						ActiveSequences[object] = nil
 					end
-
-					object[sequenceName] = newSequence
 				end
 			end)
 
-		if isLast then
 			return animChain
 		end
 	end
