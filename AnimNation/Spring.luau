@@ -1,5 +1,5 @@
 --[[ File Info
-	Author(s): ChiefWildin, TactBacon, Quenty
+	Author(s): ChiefWildin, TactBacon, Quenty, MarsSquirrel
 ]]
 
 -- Types
@@ -31,6 +31,8 @@ export type SpringImpl = {
 
 	new: (initial: Springable, clock: ((number) -> ())?) -> Spring,
 	Bind: (self: Spring, label: string, callback: (position: Springable, velocity: Springable) -> ()) -> (),
+	Pause: (self: Spring) -> (),
+	Resume: (self: Spring) -> (),
 	Destroy: (self: Spring) -> (),
 	Disconnect: (self: Spring) -> (),
 	Impulse: (self: Spring, force: Springable) -> (),
@@ -77,6 +79,8 @@ export type Spring = typeof(setmetatable(
 		_time0: number,
 		_damper: number,
 		_speed: number,
+		_paused: boolean,
+		_pauseTime: number,
 		_updating: boolean,
 		_isBound: boolean,
 		_callbacks: { [string]: (position: Springable, velocity: Springable) -> () },
@@ -386,6 +390,10 @@ function Spring:__newindex(index: string, value: any)
 end
 
 function Spring:_positionVelocity(now: number)
+	if self._paused then
+		now = self._pauseTime
+	end
+
 	local damper = self._damper
 	local speed = self._speed
 	local t = speed * (now - self._time0)
@@ -427,11 +435,15 @@ function Spring:_updateCallbacks()
 
 	task.spawn(function()
 		while self._isBound and self:IsAnimating() do
-			for _, callback in self._callbacks do
-				task.spawn(callback, self.Position, self.Velocity)
+			if not self._paused then
+				for _, callback in self._callbacks do
+					task.spawn(callback, self.Position, self.Velocity)
+				end
 			end
+
 			task.wait()
 		end
+
 		-- One more pass because callbacks may not have been called with the
 		-- final values (happens frequently during low frame rates)
 		for _, callback in self._callbacks do
@@ -567,6 +579,32 @@ function Spring:IsAnimating(epsilon: number?): (boolean, Springable)
 end
 
 --[=[
+	Pauses the spring.
+]=]
+function Spring:Pause()
+	if self._paused then
+		return
+	end
+
+	self._paused = true
+	self._pauseTime = self._clock()
+end
+
+--[=[
+	Resumes the spring.
+]=]
+function Spring:Resume()
+	if not self._paused then
+		return
+	end
+
+	local pausedDuration = self._clock() - self._pauseTime
+
+	self._time0 += pausedDuration
+	self._paused = false
+end
+
+--[=[
 	Cleans up any bindings.
 ]=]
 function Spring:Destroy()
@@ -612,6 +650,8 @@ function Spring.new(initial: Springable, clock: (() -> number)?)
 	self._speed = 1
 	self._updating = false
 	self._isBound = false
+	self._paused = false
+	self._pauseTime = 0
 	self._callbacks = {}
 
 	return setmetatable(self, Spring)

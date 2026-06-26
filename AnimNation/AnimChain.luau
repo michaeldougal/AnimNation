@@ -12,6 +12,9 @@ export type AnimChainImpl = {
 	new: (animators: { Spring | Tween }?) -> AnimChain,
 	AndThen: (AnimChain, callback: () -> ()) -> AnimChain,
 	Await: (AnimChain) -> AnimChain,
+	Resume: (AnimChain) -> AnimChain,
+	Pause: (AnimChain) -> AnimChain,
+	Destroy: (AnimChain) -> (),
 
 	-- Private members
 
@@ -27,6 +30,7 @@ export type AnimChain = typeof(setmetatable(
 		_animators: { Spring | Tween },
 		_callbackQueue: { () -> () },
 		_processingQueue: boolean,
+		_destroyed: boolean,
 	},
 	{} :: AnimChainImpl
 ))
@@ -59,15 +63,20 @@ function AnimChain:_processCallbackQueue()
 end
 
 function AnimChain:_waitForAnimationsCompleted()
+	if self._destroyed then
+		return
+	end
+
 	for _, animator: Spring | Tween in ipairs(self._animators) do
 		if typeof(animator) == "table" then -- Spring
-			while animator:IsAnimating(0.01) do
+			while animator:IsAnimating(0.01) and not self._destroyed do
 				task.wait()
 			end
 		elseif typeof(animator) == "Instance" then -- Tween
 			while
 				animator.PlaybackState ~= Enum.PlaybackState.Completed
 				and animator.PlaybackState ~= Enum.PlaybackState.Cancelled
+				and not self._destroyed
 			do
 				animator:GetPropertyChangedSignal("PlaybackState"):Wait()
 			end
@@ -83,10 +92,18 @@ end
 	@return AnimChain -- The current AnimChain object
 ]=]
 function AnimChain:AndThen(callback: () -> ()): AnimChain
+	if self._destroyed then
+		return self
+	end
+
 	task.spawn(function()
 		table.insert(self._callbackQueue, callback)
 
 		self:_waitForAnimationsCompleted()
+
+		if self._destroyed then
+			return self
+		end
 
 		self:_processCallbackQueue()
 	end)
@@ -110,6 +127,10 @@ function AnimChain:Await(): AnimChain
 
 	self:_waitForAnimationsCompleted()
 
+	if self._destroyed then
+		return self
+	end
+
 	task.spawn(self._processCallbackQueue, self)
 
 	while locked do
@@ -117,6 +138,63 @@ function AnimChain:Await(): AnimChain
 	end
 
 	return self :: AnimChain
+end
+
+--[=[
+	Pauses all animators.
+
+	@return AnimChain - The current AnimChain object.
+]=]
+function AnimChain:Pause(): AnimChain
+	for _, animator in ipairs(self._animators) do
+		animator:Pause()
+	end
+
+	return self :: AnimChain
+end
+
+--[=[
+	Resumes all animators.
+
+	@return AnimChain - The current AnimChain object
+]=]
+function AnimChain:Resume(): AnimChain
+	for _, animator in ipairs(self._animators) do
+		if typeof(animator) == "Instance" and animator:IsA("Tween") then
+			animator:Play()
+		elseif typeof(animator) == "table" then
+			animator:Resume()
+		end
+	end
+
+	return self :: AnimChain
+end
+
+--[=[
+	Destroys the AnimChain object.
+]=]
+function AnimChain:Destroy()
+	if self._destroyed then
+		return
+	end
+
+	self._destroyed = true
+
+	for _, animator in ipairs(self._animators) do
+		if typeof(animator) == "Instance" and animator:IsA("Tween") then
+			animator:Destroy()
+		elseif typeof(animator) == "table" then
+			animator:Pause()
+			animator:Destroy()
+		end
+	end
+
+	table.clear(self._animators)
+	table.clear(self._callbackQueue)
+
+	for k in pairs(self) do
+		self[k] = nil
+	end
 end
 
 --[=[
