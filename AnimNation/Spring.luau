@@ -21,7 +21,7 @@ type Converter = (
 	target: Springable | { number }
 ) -> (Springable, Springable)
 type VelocityConverter = (self: Spring, velocity: Springable) -> ()
-export type SpringImpl = {
+export type Spring = {
 	-- Metatable members
 
 	__index: (Spring, string) -> any,
@@ -40,6 +40,8 @@ export type SpringImpl = {
 	TimeSkip: (self: Spring, delta: number) -> (),
 	Unbind: (self: Spring, label: string) -> (),
 
+	-- Constructed public members
+
 	Position: Springable,
 	Velocity: Springable,
 	Target: Springable,
@@ -52,41 +54,24 @@ export type SpringImpl = {
 
 	_positionVelocity: (self: Spring, now: number) -> (Springable, Springable),
 	_updateCallbacks: (self: Spring) -> (),
+
+	-- Constructed private members
+
+	_type: string,
+	_target: Springable | { number },
+	_position0: Springable | { number },
+	_velocity0: Springable | { number },
+
+	_clock: () -> number,
+	_time0: number,
+	_damper: number,
+	_speed: number,
+	_paused: boolean,
+	_pauseTime: number,
+	_updating: boolean,
+	_isBound: boolean,
+	_callbacks: { [string]: (position: Springable, velocity: Springable) -> () },
 }
-export type Spring = typeof(setmetatable(
-	{} :: {
-		-- Constructed public members
-		Position: Springable,
-		Velocity: Springable,
-		Target: Springable,
-		Damper: number,
-		Speed: number,
-		Clock: () -> number,
-		Type: string,
-		Impulse: (Spring, force: Springable) -> (),
-		TimeSkip: (Spring, delta: number) -> (),
-		Bind: (Spring, label: string, callback: (position: Springable, velocity: Springable) -> ()) -> (),
-		Unbind: (Spring, label: string) -> (),
-		IsAnimating: (Spring, epsilon: number?) -> (boolean, Vector3),
-
-		-- Constructed private members
-		_type: string,
-		_target: Springable | { number },
-		_position0: Springable | { number },
-		_velocity0: Springable | { number },
-
-		_clock: () -> number,
-		_time0: number,
-		_damper: number,
-		_speed: number,
-		_paused: boolean,
-		_pauseTime: number,
-		_updating: boolean,
-		_isBound: boolean,
-		_callbacks: { [string]: (position: Springable, velocity: Springable) -> () },
-	},
-	{} :: SpringImpl
-))
 
 -- Module Declaration
 
@@ -134,7 +119,7 @@ export type Spring = typeof(setmetatable(
 	@within Spring
 	Returns the type of value being tracked
 ]=]
-local Spring: SpringImpl = {} :: SpringImpl
+local Spring = {}
 
 -- Constants
 
@@ -623,17 +608,18 @@ end
 --[=[
 	Creates a new spring.
 
-	@param initial Springable -- The starting position of the spring.
-	@param clock (() -> number)? -- function to use to update spring
+	@param initial Springable -- The starting position of the spring
+	@param clock (() -> number)? -- Time function to use to update spring values
+	@return Spring -- The new spring object
 ]=]
-function Spring.new(initial: Springable, clock: (() -> number)?)
+function Spring.new(initial: Springable, clock: (() -> number)?): Spring
 	local self = {}
 
 	initial = initial or 0
 
 	self._type = typeof(initial)
 
-	if self._type == "CFrame" then
+	if typeof(initial) == "CFrame" then
 		local unpacked = { initial.X, initial.Y, initial.Z, initial:ToEulerAnglesYXZ() }
 		self._target = table.clone(unpacked)
 		self._position0 = table.clone(unpacked)

@@ -4,10 +4,10 @@
 
 -- Types
 
-export type QuaternionImpl = {
+export type Quaternion = {
 	-- Metatable members
 
-	__index: QuaternionImpl,
+	__index: Quaternion,
 	__mul: (x: Quaternion, y: Quaternion) -> Quaternion,
 	__pow: (x: Quaternion, power: number) -> Quaternion,
 
@@ -24,20 +24,14 @@ export type QuaternionImpl = {
 	Slerp: (self: Quaternion, target: Quaternion, alpha: number) -> Quaternion,
 	ToCFrame: (self: Quaternion) -> CFrame,
 	ToOrientation: (self: Quaternion) -> Vector3,
+	-- Constructed public members
 
-	-- Private members
+	Vector: Vector3,
+	W: number,
+
+	-- Constructed private members
 }
-export type Quaternion = typeof(setmetatable(
-	{} :: {
-		-- Constructed public members
 
-		Vector: Vector3,
-		W: number,
-
-		-- Constructed private members
-	},
-	{} :: QuaternionImpl
-))
 -- Constructors
 
 --[=[
@@ -47,7 +41,7 @@ export type Quaternion = typeof(setmetatable(
 	(https://github.com/EgoMooseOldProjects/ExampleDump/blob/master/Scripts/slerp.lua)
 	provided under the open-source MIT license.
 ]=]
-local Quaternion: QuaternionImpl = { ClassName = "Quaternion" } :: QuaternionImpl
+local Quaternion = { ClassName = "Quaternion" }
 
 --[=[
 	Constructs a new Quaternion object from a given scalar value and vector
@@ -56,7 +50,7 @@ local Quaternion: QuaternionImpl = { ClassName = "Quaternion" } :: QuaternionImp
 	@param v Vector3 -- The vector part of the quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.new(w: number, v: Vector3)
+function Quaternion.new(w: number, v: Vector3): Quaternion
 	local self = setmetatable({}, {
 		__index = Quaternion,
 		__mul = function(x: Quaternion, y: Quaternion)
@@ -92,7 +86,7 @@ end
 	@param cframe CFrame -- The CFrame to convert to a Quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.fromCFrame(cframe: CFrame)
+function Quaternion.fromCFrame(cframe: CFrame): Quaternion
 	local _, _, _, m00, m01, m02, m10, m11, m12, m20, m21, m22 = cframe:GetComponents()
 	local trace = m00 + m11 + m22
 	if trace > 0 then
@@ -124,7 +118,7 @@ end
 	@param orientation Vector3 -- The Orientation (in degrees) to convert to a Quaternion
 	@return Quaternion -- The constructed Quaternion object
 ]=]
-function Quaternion.fromOrientation(orientation: Vector3)
+function Quaternion.fromOrientation(orientation: Vector3): Quaternion
 	-- Convert to radians
 	orientation *= math.pi / 180
 

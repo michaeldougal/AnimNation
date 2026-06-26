@@ -4,7 +4,7 @@
 
 -- Types
 
-export type SplineImpl = {
+export type Spline = {
 	-- Metatable members
 
 	__index: (self: Spline, key: string) -> any,
@@ -12,45 +12,38 @@ export type SplineImpl = {
 
 	-- Public members
 
-	ControlPoints: { CFrame },
-	Curve: Model,
-	Parent: Instance?,
-	Visible: boolean,
-
 	new: (controlPoints: { CFrame }) -> Spline,
 	Destroy: (self: Spline) -> (),
 	GetCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
 	GetLinearCFrameFromAlpha: (self: Spline, alpha: number, alignment: ("Track" | "Nodes")?) -> CFrame,
 
+	-- Constructed public members
+
+	ControlPoints: { CFrame },
+	Curve: Model,
+	Destroying: RBXScriptSignal,
+	Parent: Instance?,
+	Segments: number,
+	Visible: boolean,
+
 	-- Private members
 
 	_drawCurve: (self: Spline) -> (),
 	_update: (self: Spline) -> (),
-}
-export type Spline = typeof(setmetatable(
-	{} :: {
-		-- Constructed public members
-		ControlPoints: { CFrame },
-		Curve: Model,
-		Destroying: RBXScriptSignal,
-		Parent: Instance?,
-		Segments: number,
-		Visible: boolean,
 
-		-- Constructed private members
-		_controlPoints: { CFrame },
-		_curveDrawn: boolean,
-		_curveLength: number,
-		_destroying: BindableEvent,
-		_distancePoints: { number },
-		_listeners: { RBXScriptConnection },
-		_normalizedDistancePoints: { number },
-		_parent: Instance?,
-		_segments: number,
-		_visible: boolean,
-	},
-	{} :: SplineImpl
-))
+	-- Constructed private members
+
+	_controlPoints: { CFrame },
+	_curveDrawn: boolean,
+	_curveLength: number,
+	_destroying: BindableEvent,
+	_distancePoints: { number },
+	_listeners: { RBXScriptConnection },
+	_normalizedDistancePoints: { number },
+	_parent: Instance?,
+	_segments: number,
+	_visible: boolean,
+}
 
 -- Constants
 
@@ -102,7 +95,7 @@ local Quaternion = require(script.Parent:WaitForChild("Quaternion")) ---@module 
 	Whether or not the spline curve is visible in the workspace. Default false.
 ]=]
 
-local Spline: SplineImpl = {} :: SplineImpl
+local Spline = {}
 
 Spline.__index = function(self, key)
 	if key == "Visible" then
@@ -151,17 +144,14 @@ local function CatmullRom(p0, p1, p2, p3)
 		-- The tangent at p1
 		0.5 * (p2 - p0),
 		-- The second derivative at p1
-		p0
-			- 2.5 * p1
-			+ 2 * p2
-			- 0.5 * p3,
+		p0 - 2.5 * p1 + 2 * p2 - 0.5 * p3,
 		-- The third derivative at p1
 		1.5 * (p1 - p2) + 0.5 * (p3 - p0)
 end
 
 -- Performs spherical linear interpolation between two CFrames and returns the
 -- CFrame at the given alpha value
-local function Slerp(origin: CFrame, target: CFrame, alpha: number): CFrame
+local function _Slerp(origin: CFrame, target: CFrame, alpha: number): CFrame
 	local position = origin.Position:Lerp(target.Position, alpha)
 	local originQuaternion = Quaternion.fromCFrame(origin)
 	local targetQuaternion = Quaternion.fromCFrame(target)
@@ -395,7 +385,7 @@ end
 	@param controlPoints { CFrame } -- The control points for the spline.
 	@return Spline -- The new Spline object.
 ]=]
-function Spline.new(controlPoints: { CFrame })
+function Spline.new(controlPoints: { CFrame }): Spline
 	local self = setmetatable({}, Spline)
 
 	self._listeners = {} :: { RBXScriptConnection }

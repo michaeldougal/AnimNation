@@ -420,6 +420,9 @@ local function animateSequence(
 			return animChain
 		end
 	end
+
+	-- Unreachable, but satisfies type checking
+	return AnimChain.new()
 end
 
 local function createTweenInfoFromTable(info: { [string]: any })
@@ -603,7 +606,7 @@ function AnimNation.tween(
 		else
 			local propertyType = typeof(object[property])
 			if propertyType == "ColorSequence" or propertyType == "NumberSequence" then
-				alternativeAnimChain = animateSequence(object, property, "tween", tweenInfo, newValue)
+				alternativeAnimChain = animateSequence(object, property, "tween", tweenInfo :: TweenInfo, newValue)
 				properties[property] = nil
 			else
 				normalCount += 1
@@ -898,7 +901,7 @@ function AnimNation.impulse(
 			elseif isModel and property == "Scale" then
 				springInfo.Initial = model:GetScale()
 			else
-				springInfo.Initial = object[property]
+				springInfo.Initial = object[property] :: any
 			end
 
 			if not SpringEvents[object] then

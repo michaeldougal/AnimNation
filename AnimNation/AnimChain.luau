@@ -2,7 +2,7 @@ local Spring = require(script.Parent:WaitForChild("Spring"))
 
 type Spring = Spring.Spring
 
-export type AnimChainImpl = {
+export type AnimChain = {
 	-- Metatable members
 
 	__index: AnimChain,
@@ -21,19 +21,14 @@ export type AnimChainImpl = {
 	_addAnimator: (AnimChain, animator: Spring | Tween) -> (),
 	_processCallbackQueue: (AnimChain) -> (),
 	_waitForAnimationsCompleted: (AnimChain) -> (),
-}
-export type AnimChain = typeof(setmetatable(
-	{} :: {
-		-- Constructed public members
 
-		-- Constructed private members
-		_animators: { Spring | Tween },
-		_callbackQueue: { () -> () },
-		_processingQueue: boolean,
-		_destroyed: boolean,
-	},
-	{} :: AnimChainImpl
-))
+	-- Constructed private members
+
+	_animators: { Spring | Tween },
+	_callbackQueue: { () -> () },
+	_processingQueue: boolean,
+	_destroyed: boolean,
+}
 
 --[=[
 	@class AnimChain
@@ -43,7 +38,7 @@ export type AnimChain = typeof(setmetatable(
 	be used to wait for the animation to complete. These links are processed
 	in the order they are called in.
 ]=]
-local AnimChain: AnimChainImpl = {} :: AnimChainImpl
+local AnimChain = {}
 AnimChain.__index = AnimChain
 
 function AnimChain:_addAnimator(animator: Spring | Tween)
@@ -55,7 +50,7 @@ function AnimChain:_processCallbackQueue()
 		self._processingQueue = true
 
 		while self._callbackQueue[1] do
-			table.remove(self._callbackQueue, 1)()
+			(table.remove(self._callbackQueue, 1) :: () -> ())()
 		end
 
 		self._processingQueue = false
@@ -72,7 +67,7 @@ function AnimChain:_waitForAnimationsCompleted()
 			while animator:IsAnimating(0.01) and not self._destroyed do
 				task.wait()
 			end
-		elseif typeof(animator) == "Instance" then -- Tween
+		elseif typeof(animator) == "Instance" and animator:IsA("Tween") then -- Tween
 			while
 				animator.PlaybackState ~= Enum.PlaybackState.Completed
 				and animator.PlaybackState ~= Enum.PlaybackState.Cancelled
@@ -102,7 +97,7 @@ function AnimChain:AndThen(callback: () -> ()): AnimChain
 		self:_waitForAnimationsCompleted()
 
 		if self._destroyed then
-			return self
+			return
 		end
 
 		self:_processCallbackQueue()
@@ -143,7 +138,7 @@ end
 --[=[
 	Pauses all animators.
 
-	@return AnimChain - The current AnimChain object.
+	@return AnimChain -- The current AnimChain object.
 ]=]
 function AnimChain:Pause(): AnimChain
 	for _, animator in ipairs(self._animators) do
@@ -156,7 +151,7 @@ end
 --[=[
 	Resumes all animators.
 
-	@return AnimChain - The current AnimChain object
+	@return AnimChain -- The current AnimChain object
 ]=]
 function AnimChain:Resume(): AnimChain
 	for _, animator in ipairs(self._animators) do
@@ -203,7 +198,7 @@ end
 	@param animators { Spring | Tween }? -- A list of animators to add to the chain
 	@return AnimChain -- The constructed AnimChain object
 ]=]
-function AnimChain.new(animators: { Spring | Tween }?)
+function AnimChain.new(animators: { Spring | Tween }?): AnimChain
 	local self = setmetatable({}, AnimChain)
 
 	self._animators = animators or {}
