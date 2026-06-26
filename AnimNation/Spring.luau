@@ -1,5 +1,5 @@
 --[[ File Info
-	Author(s): ChiefWildin, TactBacon, Quenty
+	Author(s): ChiefWildin, TactBacon, Quenty, MarsSquirrel
 ]]
 
 -- Types
