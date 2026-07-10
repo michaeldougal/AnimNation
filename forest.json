@@ -1,0 +1,10 @@
+{
+  "author": "chiefwildin",
+  "dependencies": {},
+  "description": "An animation library that enables quick one-shot style animations for most instances and properties.",
+  "license": "MIT",
+  "name": "animnation",
+  "platform": "roblox",
+  "root": "AnimNation\\init.luau",
+  "version": "1.14.0"
+}
